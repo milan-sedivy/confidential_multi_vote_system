@@ -18,7 +18,7 @@ pub struct ElGamalVerifier {
     rng: ThreadRng,
 }
 pub struct ElGamalGenerator {
-    components: ElGamalComponents,
+    pub(crate) components: ElGamalComponents,
     key_pair: KeyPair,
     rng: ThreadRng,
 }
@@ -29,7 +29,7 @@ pub struct ElGamalCipher {
 }
 #[derive(Clone,Debug, Serialize, Deserialize)]
 pub struct ElGamalComponents {
-    pub(crate) g: BigUint,
+    pub g: BigUint,
     pub(crate) p: BigUint,
     pub(crate) q: BigUint,
 }

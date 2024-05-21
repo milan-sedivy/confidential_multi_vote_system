@@ -1,12 +1,12 @@
 use std::ops::DerefMut;
 use num_bigint::{BigInt, BigUint, ToBigInt};
 use sha256::digest;
-use crate::crypto_schemes::el_gamal::{Encryption, Signature};
+use crate::crypto_schemes::el_gamal::{ElGamalGenerator, Encryption, Signature};
 use crate::crypto_schemes::paillier::{Cipher, Combiner, Generator, KeyPair, PaillierCipher, PaillierGenerator, PublicKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Result;
 use ws::listen;
-use crate::data::Data;
+use crate::data::{Data, MessageType};
 
 mod crypto_schemes;
 mod utils;
@@ -32,21 +32,21 @@ fn main() {
     // println!("{}", el_gamal.verify(String::from("Hello"), signature));
 
     let mut paillier = PaillierGenerator::init(4);
-    println!("{:?}", paillier);
+   // println!("{:?}", paillier);
     paillier.create_shares();
     let mut paillier_combiner = Combiner::init_from(&paillier.key_pair.public_key, paillier.delta.clone());
     //paillier.key_pair.shares.iter().for_each(|e|)
 
     let mut cipher_engines: Vec<PaillierCipher> = vec![];
     paillier.key_pair.shares.iter().for_each(|e| cipher_engines.push(PaillierCipher::init_from(&paillier.key_pair.public_key, e, paillier.delta.clone())));
-    println!("{:?}", cipher_engines);
-    println!("{}", cipher_engines.len());
+  //  println!("{:?}", cipher_engines);
+  //  println!("{}", cipher_engines.len());
     let t = BigUint::from(5u8);
     let encrypted = cipher_engines[1].encrypt(t);
-    println!("{}", encrypted);
+   // println!("{}", encrypted);
     cipher_engines.iter_mut().for_each(|e| paillier_combiner.add_decrypted_message_share(e.decrypt_share(encrypted.clone())));
 
-    println!("{}", paillier_combiner.combine_shares());
+   // println!("{}", paillier_combiner.combine_shares());
     let mut data_vec: Vec<Data> = vec![];
     paillier.key_pair.shares.iter().for_each(|e| {
         data_vec.push(Data {public_key: paillier.key_pair.public_key.clone(), secret_share: e.clone(), delta: 24});
@@ -54,14 +54,18 @@ fn main() {
     });
     use ws::{connect, CloseCode};
 
-    connect("ws://127.0.0.1:3012", |out| {
-        data_vec.iter().for_each(|e| out.send(serde_json::to_string(e).unwrap()).unwrap());
 
+    connect("ws://127.0.0.1:8001", |out| {
+        //data_vec.iter().for_each(|e| out.send(serde_json::to_string(e).unwrap()).unwrap());
+        let el_gamal = ElGamalGenerator::new();
+        let test = serde_json::to_string(&MessageType::ElGamalData(el_gamal.components));
+        let _ = out.send(test.unwrap());
         move |msg| {
             println!("Got message: {}", msg);
             out.close(CloseCode::Normal)
         }
-    }).unwrap()
+    }).unwrap();
+
     // paillier.create_shares(4u8);
     // //let mut shares: Vec<BigUint> = paillier.key_pair.get_shares().clone().iter_mut().map(|e| paillier.decrypt_share(encrypted.clone(),e.clone())).collect();
     // println!("c (encrypted): {}", encrypted);
