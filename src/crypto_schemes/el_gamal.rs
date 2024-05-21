@@ -3,38 +3,38 @@ use num_prime::RandPrime;
 use num_bigint::{BigUint, RandBigInt};
 use rand::rngs::ThreadRng;
 use rand::thread_rng;
+use serde::{Deserialize, Serialize};
 use super::error::CryptoError::{self, MessageOutOfBounds};
 use super::bigint::*;
 use sha256::digest;
 
 pub struct ElGamalSigner {
-    components: Components,
+    components: ElGamalComponents,
     key_pair: KeyPair,
     rng: ThreadRng,
 }
 pub struct ElGamalVerifier {
-    components: Components,
-    y: BigUint,
+    components: ElGamalComponents,
     rng: ThreadRng,
 }
 pub struct ElGamalGenerator {
-    components: Components,
+    components: ElGamalComponents,
     key_pair: KeyPair,
     rng: ThreadRng,
 }
 pub struct ElGamalCipher {
-    components: Components,
+    components: ElGamalComponents,
     key_pair: KeyPair,
     rng: ThreadRng,
 }
-#[derive(Clone)]
-pub struct Components {
-    g: BigUint,
-    p: BigUint,
-    q: BigUint,
+#[derive(Clone,Debug, Serialize, Deserialize)]
+pub struct ElGamalComponents {
+    pub(crate) g: BigUint,
+    pub(crate) p: BigUint,
+    pub(crate) q: BigUint,
 }
 
-impl Components {
+impl ElGamalComponents {
     pub fn generate_random(&mut self, rng: &mut ThreadRng) -> BigUint {
         let upper_bound = self.q.clone() - BigUint::from(2u8);
         let lower_bound = BigUint::from(2u8);
@@ -59,7 +59,7 @@ impl ElGamalGenerator {
             rng
         }
     }
-    fn generate_components(rng: &mut ThreadRng) -> Components {
+    fn generate_components(rng: &mut ThreadRng) -> ElGamalComponents {
         let p: BigUint = rng.gen_safe_prime(256);
         let q: BigUint = (p.clone() - BigUint::one())/BigUint::from(2u8);
         let mut g: BigUint = BigUint::from(2u8);
@@ -67,9 +67,9 @@ impl ElGamalGenerator {
         while g.modpow(&q, &p) != BigUint::one() {
             g = g + BigUint::one();
         }
-        Components {g, p, q}
+        ElGamalComponents {g, p, q}
     }
-    fn generate_keypair(components: &mut Components, rng: &mut ThreadRng) -> KeyPair {
+    fn generate_keypair(components: &mut ElGamalComponents, rng: &mut ThreadRng) -> KeyPair {
         let x = components.generate_random(rng);
         let y = components.g.clone().modpow(&x, &components.p);
         KeyPair {x, y}
@@ -88,7 +88,7 @@ impl ElGamalGenerator {
 }
 impl ElGamalSigner {
 
-    pub fn from(components: Components, key_pair: KeyPair) -> Self {
+    pub fn from(components: ElGamalComponents, key_pair: KeyPair) -> Self {
         ElGamalSigner {
             components,
             key_pair,
@@ -99,7 +99,7 @@ impl ElGamalSigner {
 
 pub struct EncryptedMessage(BigUint, BigUint);
 impl ElGamalCipher {
-    pub fn from(components: Components, key_pair: KeyPair) -> Self {
+    pub fn from(components: ElGamalComponents, key_pair: KeyPair) -> Self {
         ElGamalCipher {
             components,
             key_pair,
@@ -108,10 +108,9 @@ impl ElGamalCipher {
     }
 }
 impl ElGamalVerifier {
-    pub fn from(components: Components, y: BigUint) -> Self {
+    pub fn from(components: ElGamalComponents) -> Self {
         ElGamalVerifier {
             components,
-            y,
             rng: thread_rng()
         }
     }
@@ -168,14 +167,14 @@ impl Signature for ElGamalSigner {
 
 }
 impl Verify for ElGamalVerifier {
-    fn verify(&mut self, message: String,  signature: (BigUint, BigUint)) -> bool {
+    fn verify(&mut self, message: String, y: &BigUint,  signature: (BigUint, BigUint)) -> bool {
         if (signature.0 == BigUint::zero() || signature.0 > self.components.p) { return false }
         if (signature.1 == BigUint::zero() || signature.1 > (&self.components.p - BigUint::one())) { return false }
         let hash_dec = hash(message);
         let modulo = self.components.p.clone();
 
         let lhs = self.components.g.modpow(&hash_dec, &modulo);
-        let rhs = self.y.modpow(&signature.0, &modulo)*signature.0.modpow(&signature.1, &modulo);
+        let rhs = y.modpow(&signature.0, &modulo)*signature.0.modpow(&signature.1, &modulo);
         return lhs == (rhs % &modulo)
     }
 }
@@ -197,6 +196,6 @@ pub trait Signature {
 
 }
 pub trait Verify {
-    fn verify(&mut self, message: String,  signature: (BigUint, BigUint)) -> bool;
+    fn verify(&mut self, message: String, y: &BigUint,  signature: (BigUint, BigUint)) -> bool;
 }
 

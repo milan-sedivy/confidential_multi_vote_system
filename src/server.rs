@@ -21,6 +21,7 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 type Tx = UnboundedSender<Message>;
 
 pub struct Votes {
+    el_gamal_verifier: Option<ElGamalVerifier>,
     accepted_keys: HashSet<BigUint>,
     encrypted_tally: BigUint,
 }
@@ -32,6 +33,16 @@ Server ---> add key
 
 */
 impl Votes {
+    pub fn new() -> Self {
+        let el_gamal_verifier = None;
+        let accepted_keys = HashSet::<BigUint>::new();
+        let encrypted_tally = BigUint::from(0u8);
+        Self {
+            el_gamal_verifier,
+            accepted_keys,
+            encrypted_tally
+        }
+    }
     fn add_vote_to_tally() {}
 
     pub fn add_key(&mut self, chameleon_key: &BigUint) {
