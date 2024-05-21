@@ -1,7 +1,7 @@
 // use ws::{listen, Message};
 pub mod crypto_schemes;
 pub mod data;
-use crate::data::{Data, KeysData};
+use crate::data::{Data, KeysData, MessageType};
 use crate::crypto_schemes::el_gamal::*;
 use crate::crypto_schemes::bigint::*;
 use std::{
@@ -12,10 +12,11 @@ use std::{
 };
 use std::fmt::Debug;
 use std::io::Error;
+use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
 
 use futures_channel::mpsc::{unbounded, UnboundedSender};
-use futures_util::{future, pin_mut, SinkExt, stream::TryStreamExt, StreamExt};
+use futures_util::{future, lock, pin_mut, SinkExt, stream::TryStreamExt, StreamExt};
 use num_bigint::BigUint;
 
 use tokio::net::{TcpListener, TcpStream};
@@ -24,7 +25,12 @@ use log::info;
 use crate::crypto_schemes::paillier::Components;
 
 type Tx = UnboundedSender<Message>;
-
+#[derive(Clone)]
+pub struct SharedVotes {
+    el_gamal_verifier: Option<ElGamalVerifier>,
+    accepted_keys: HashSet<BigUint>,
+    encrypted_tally: BigUint,
+}
 pub struct Votes {
     el_gamal_verifier: Option<ElGamalVerifier>,
     accepted_keys: HashSet<BigUint>,
@@ -37,11 +43,12 @@ Encrypted Vote --> Add to tally (check_and_remove_key)
 Server ---> add key
 
 */
-impl Votes {
+unsafe impl Send for SharedVotes {}
+impl SharedVotes {
     pub fn new() -> Self {
         let el_gamal_verifier = None;
         let accepted_keys = HashSet::<BigUint>::new();
-        let encrypted_tally = BigUint::from(0u8);
+        let encrypted_tally = BigUint::zero();
         Self {
             el_gamal_verifier,
             accepted_keys,
@@ -83,6 +90,7 @@ async fn main() -> Result<(), Error> {
     builder.target(Target::Stdout);
 
     builder.init();
+    let voting_ballot = Arc::new(Mutex::new(SharedVotes::new()));
     let addr = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8002".to_string());
 
     // Create the event loop and TCP listener we'll accept connections on.
@@ -91,13 +99,13 @@ async fn main() -> Result<(), Error> {
     println!("Listening on: {}", addr);
 
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream));
+        tokio::spawn(accept_connection(stream, voting_ballot.clone()));
     }
 
     Ok(())
 }
 
-async fn accept_connection(stream: TcpStream) {
+async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVotes>>) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     println!("Peer address: {}", addr);
 
@@ -108,12 +116,33 @@ async fn accept_connection(stream: TcpStream) {
     println!("New WebSocket connection: {}", addr);
     let msg = Message::from("Hello world");
     let (write, mut read) = ws_stream.split();
-    // We should not forward messages other than text or binary.
 
     while let Some(result) = read.next().await {
         match result {
             Ok(msg) => {
                 println!("Received a message: {}", msg);
+                match serde_json::from_str(msg.to_text().unwrap()).unwrap() {
+                    MessageType::KeysData(mut e) => {
+                        //println!("KeysData: {:?}", e)
+                        voting_ballot.lock().unwrap().add_keys(&mut e);
+                        println!("{:?}", voting_ballot.lock().unwrap().accepted_keys);
+                    },
+                    MessageType::ElGamalData(mut e) => {
+                        voting_ballot.lock().unwrap().el_gamal_verifier = Some(ElGamalVerifier::from(e));
+                    },
+                    MessageType::EncryptedVote(e) => {
+                        if voting_ballot.lock().unwrap().check_and_remove_key(e.encrypted_vote.to_string(), e.el_gamal_signature.clone()) {
+                            println!("{}", voting_ballot.lock().unwrap().encrypted_tally);
+                            if voting_ballot.lock().unwrap().encrypted_tally == BigUint::zero() {
+                                voting_ballot.lock().unwrap().encrypted_tally = e.encrypted_vote;
+                            } else {
+                                voting_ballot.lock().unwrap().encrypted_tally *= e.encrypted_vote;
+                            }
+                        }
+                        println!("{}", voting_ballot.lock().unwrap().encrypted_tally);
+                    }
+                    _ => {}
+                }
             }
             Err(e) => {
                 println!("Error receiving message: {}", e);

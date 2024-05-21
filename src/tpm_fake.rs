@@ -3,11 +3,14 @@ use std::io::Error;
 use env_logger::{Builder, Target};
 use log::info;
 use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
+use num_bigint::BigUint;
 use tokio::fs::write;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
+use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalVerifier};
+
 pub mod data;
 pub mod crypto_schemes;
 use crate::data::*;
@@ -67,7 +70,13 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
             Ok(msg) => {
                 println!("Received a message: {}", msg);
                 match serde_json::from_str(msg.to_text().unwrap()).unwrap() {
-                    MessageType::ElGamalData(e) => {println!("{}", e.g)},
+                    MessageType::ElGamalData(e) => {
+                        //temporary for debugging purposes
+                        let generator = ElGamalGenerator::from(e.clone());
+                        let keys_data = create_el_gamal_keys(e, generator.key_pair.y);
+                        let msg = MessageType::KeysData(keys_data);
+                        tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
+                    },
                     _ => println!("Something else")
                 }
             }
@@ -80,4 +89,12 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
 
     tx.unbounded_send(msg);
 
+}
+
+fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint) -> KeysData {
+    let mut el_gamal_verifier = ElGamalVerifier::from(components);
+    let el_gamal_pks = el_gamal_verifier.generate_multiple_chameleon_pks(y, 10);
+    KeysData {
+        el_gamal_pks,
+    }
 }

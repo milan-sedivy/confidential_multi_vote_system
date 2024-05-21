@@ -7,31 +7,33 @@ use serde::{Deserialize, Serialize};
 use super::error::CryptoError::{self, MessageOutOfBounds};
 use super::bigint::*;
 use sha256::digest;
+use crate::crypto_schemes::paillier::Components;
 
 pub struct ElGamalSigner {
     components: ElGamalComponents,
     key_pair: KeyPair,
     rng: ThreadRng,
 }
+#[derive(Clone)]
 pub struct ElGamalVerifier {
     components: ElGamalComponents,
     rng: ThreadRng,
 }
 pub struct ElGamalGenerator {
-    pub(crate) components: ElGamalComponents,
-    key_pair: KeyPair,
+    pub components: ElGamalComponents,
+    pub key_pair: KeyPair,
     rng: ThreadRng,
 }
 pub struct ElGamalCipher {
-    components: ElGamalComponents,
+    pub components: ElGamalComponents,
     key_pair: KeyPair,
     rng: ThreadRng,
 }
 #[derive(Clone,Debug, Serialize, Deserialize)]
 pub struct ElGamalComponents {
     pub g: BigUint,
-    pub(crate) p: BigUint,
-    pub(crate) q: BigUint,
+    pub p: BigUint,
+    pub q: BigUint,
 }
 
 impl ElGamalComponents {
@@ -44,7 +46,7 @@ impl ElGamalComponents {
 #[derive(Clone)]
 pub struct KeyPair {
     x: BigUint, // sk Option!
-    y: BigUint, // pk
+    pub y: BigUint, // pk
 }
 
 
@@ -52,6 +54,15 @@ impl ElGamalGenerator {
     pub fn new() -> Self {
         let mut rng = thread_rng();
         let mut components = ElGamalGenerator::generate_components(&mut rng);
+        let key_pair = ElGamalGenerator::generate_keypair(&mut components, &mut rng);
+        ElGamalGenerator {
+            components,
+            key_pair,
+            rng
+        }
+    }
+    pub fn from(mut components: ElGamalComponents) -> Self {
+        let mut rng = thread_rng();
         let key_pair = ElGamalGenerator::generate_keypair(&mut components, &mut rng);
         ElGamalGenerator {
             components,

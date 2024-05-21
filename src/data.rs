@@ -14,8 +14,15 @@ pub struct KeysData {
     pub el_gamal_pks: Vec<BigUint>,
 }
 #[derive(Debug, Serialize, Deserialize)]
+pub struct VoteData {
+    pub encrypted_vote: BigUint,
+    pub el_gamal_signature: (BigUint, BigUint)
+}
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MessageType {
+    EncryptedVote(VoteData),
     PailierData(Data),
     KeysData(KeysData),
     ElGamalData(ElGamalComponents)
 }
+
