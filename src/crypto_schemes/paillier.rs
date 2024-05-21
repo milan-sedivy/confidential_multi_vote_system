@@ -2,6 +2,7 @@ use num_bigint::{BigInt, BigUint, RandBigInt};
 use num_prime::RandPrime;
 use rand::prelude::ThreadRng;
 use rand::thread_rng;
+use serde::{Deserialize, Serialize};
 use crate::crypto_schemes::bigint::{UsefulOperations, UsefulConstants, ModSub};
 #[derive(Debug)]
 pub struct Components {
@@ -10,7 +11,7 @@ pub struct Components {
     pub p_sub: BigUint,
     pub q_sub: BigUint,
 }
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug, Serialize, Deserialize)]
 pub struct PublicKey {
     pub N: BigUint,
     pub g: BigUint,
