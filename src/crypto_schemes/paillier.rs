@@ -167,18 +167,7 @@ impl Cipher for PaillierCipher {
         message.modpow(&(BigUint::from(2*self.delta)*&self.secret_share), &self.public_key.N.pow(2))
     }
 }
-/*pub struct PaillierCipher {
-    rng: ThreadRng,
-    pub public_key: PublicKey,
-    secret_share: BigUint,
-    delta: u128
-}
 
-pub struct Combiner {
-    public_key: PublicKey,
-    decrypted_message_shares: Vec<BigUint>,
-    delta: u128
-}*/
 impl PaillierCipher {
     pub fn init_from(public_key: &PublicKey, secret_share: &BigUint, delta: u128) -> Self {
         let rng = thread_rng();
