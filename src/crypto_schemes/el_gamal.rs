@@ -66,13 +66,9 @@ impl ElGamal {
         let q: BigUint = (p.clone() - BigUint::one())/BigUint::from(2u8);
         let mut g: BigUint = BigUint::from(2u8);
 
-        // let condition = q.clone() - BigUint::one();
-        // let exponent = (q.clone() - BigUint::one())/BigUint::from(2u8);
-        println!("It gets stuck here");
         while g.modpow(&q, &p) != BigUint::one() {
             g = g + BigUint::one();
         }
-        println!("{q} {p} {g}");
         self.components = Some(Components {g, p, q});
     }
     fn generate_keypair(&mut self) {
@@ -86,7 +82,6 @@ impl ElGamal {
             }
         };
         let y = components.g.clone().modpow(&x, &components.p);
-        println!("{x} {y}");
         self.key_pair = KeyPair {x: Some(x), y: Some(y)};
     }
 }
@@ -96,7 +91,7 @@ pub struct EncryptedMessage(BigUint, BigUint);
 impl Encryption for ElGamal {
     fn encrypt(&mut self, message: BigUint) -> Result<EncryptedMessage,CryptoError> {
         let h = self.generate_random();
-        if (h == BigUint::zero()) {return Err(MissingComponents)};
+        if h == BigUint::zero() {return Err(MissingComponents)};
         let Some(components) = &self.components else { return Err(MissingComponents)};
         if message == BigUint::zero() || message.ge(&components.p) { return Err(MessageOutOfBounds)}
         let Some(y) = &self.key_pair.y else { return Err(MissingPublicKey)};
