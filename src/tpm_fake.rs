@@ -1,19 +1,23 @@
 use std::env;
 use std::io::Error;
+use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
-use log::info;
-use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
+use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use num_bigint::BigUint;
-use tokio::fs::write;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
 use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalVerifier};
-
+mod certificate;
 pub mod data;
 pub mod crypto_schemes;
 use crate::data::*;
+unsafe impl Send for KeyStore {}
+#[derive(Clone)]
+pub struct KeyStore {
+    pub voters_pk: BigUint,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -63,19 +67,22 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
 
     println!("New WebSocket connection: {}", addr);
     let msg = Message::from("Hello world");
-    let (write, mut read) = ws_stream.split();
+    let (mut write, mut read) = ws_stream.split();
 
     while let Some(result) = read.next().await {
         match result {
             Ok(msg) => {
                 println!("Received a message: {}", msg);
+                if msg.is_empty() { break }
                 match serde_json::from_str(msg.to_text().unwrap()).unwrap() {
-                    MessageType::ElGamalData(e) => {
+                    MessageType::ElGamalData(components, pk) => {
                         //temporary for debugging purposes
-                        let generator = ElGamalGenerator::from(e.clone());
-                        let keys_data = create_el_gamal_keys(e, generator.key_pair.y);
+                        let generator = Arc::new(Mutex::new(ElGamalGenerator::from(components.clone())));
+                        let (keys_data, alphas_data) = create_el_gamal_keys(components, generator.lock().unwrap().key_pair.y.clone());
                         let msg = MessageType::KeysData(keys_data);
                         tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
+                        let msg = MessageType::KeysData(alphas_data);
+                        let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
                     },
                     _ => println!("Something else")
                 }
@@ -91,10 +98,36 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
 
 }
 
-fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint) -> KeysData {
+
+// Steps the TPM/PEM will do:
+
+
+// Verify signature on ceritficate
+fn verify_certificate() {
+    todo!()
+}
+
+//Decipher the incoming SubjData using your own key
+//Result should be:
+// - Obtaining encrypted SK
+// - Deciphering SubjData with SK
+// - Obtaining ElGamal key (for encryption later on)
+fn decipher_subj_data() {
+    todo!()
+}
+
+// Create alphas and chameleon keys
+fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint) -> (KeysData, KeysData) {
     let mut el_gamal_verifier = ElGamalVerifier::from(components);
-    let el_gamal_pks = el_gamal_verifier.generate_multiple_chameleon_pks(y, 10);
-    KeysData {
-        el_gamal_pks,
-    }
+    let (el_gamal_pks, alphas) = el_gamal_verifier.generate_multiple_chameleon_pks(y, 10);
+    (KeysData {
+        el_gamal_pks_or_alphas: el_gamal_pks,
+    }, KeysData {
+        el_gamal_pks_or_alphas: alphas
+    })
+}
+
+// Encrypt Alphas
+fn encrypt_alphas() {
+    todo!()
 }

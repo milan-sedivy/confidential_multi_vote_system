@@ -7,31 +7,20 @@ use crate::crypto_schemes::bigint::*;
 use std::{
     collections::HashSet,
     env,
-    io::Error as IoError,
-    net::SocketAddr,
 };
 use std::fmt::Debug;
 use std::io::Error;
 use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
-
-use futures_channel::mpsc::{unbounded, UnboundedSender};
-use futures_util::{future, lock, pin_mut, SinkExt, stream::TryStreamExt, StreamExt};
+use futures_channel::mpsc::{UnboundedSender};
+use futures_util::{SinkExt, stream::TryStreamExt, StreamExt};
 use num_bigint::BigUint;
-
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
-use log::info;
-use crate::crypto_schemes::paillier::Components;
 
 type Tx = UnboundedSender<Message>;
 #[derive(Clone)]
 pub struct SharedVotes {
-    el_gamal_verifier: Option<ElGamalVerifier>,
-    accepted_keys: HashSet<BigUint>,
-    encrypted_tally: BigUint,
-}
-pub struct Votes {
     el_gamal_verifier: Option<ElGamalVerifier>,
     accepted_keys: HashSet<BigUint>,
     encrypted_tally: BigUint,
@@ -64,7 +53,7 @@ impl SharedVotes {
     }
 
     pub fn add_keys(&mut self, keys_data: &mut KeysData) {
-        keys_data.el_gamal_pks.iter().for_each(|key|{
+        keys_data.el_gamal_pks_or_alphas.iter().for_each(|key|{
             self.add_key(key);
         });
     }
@@ -121,14 +110,14 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
         match result {
             Ok(msg) => {
                 println!("Received a message: {}", msg);
-                match serde_json::from_str(msg.to_text().unwrap()).unwrap() {
+                match serde_json::from_str(msg.to_text().unwrap()).unwrap_or(MessageType::Nothing) {
                     MessageType::KeysData(mut e) => {
                         //println!("KeysData: {:?}", e)
                         voting_ballot.lock().unwrap().add_keys(&mut e);
                         println!("{:?}", voting_ballot.lock().unwrap().accepted_keys);
                     },
-                    MessageType::ElGamalData(mut e) => {
-                        voting_ballot.lock().unwrap().el_gamal_verifier = Some(ElGamalVerifier::from(e));
+                    MessageType::ElGamalData(mut components, pk) => {
+                        voting_ballot.lock().unwrap().el_gamal_verifier = Some(ElGamalVerifier::from(components));
                     },
                     MessageType::EncryptedVote(e) => {
                         if voting_ballot.lock().unwrap().check_and_remove_key(e.encrypted_vote.to_string(), e.el_gamal_signature.clone()) {

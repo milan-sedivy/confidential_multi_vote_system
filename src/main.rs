@@ -1,18 +1,17 @@
+use std::fs;
 use std::ops::DerefMut;
-use num_bigint::{BigInt, BigUint, ToBigInt};
-use sha256::digest;
-use crate::crypto_schemes::el_gamal::{ElGamalGenerator, Encryption, Signature};
+use num_bigint::{BigUint, ToBigInt};
+use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalSigner, Encryption, Signature};
 use crate::crypto_schemes::paillier::{Cipher, Combiner, Generator, KeyPair, PaillierCipher, PaillierGenerator, PublicKey};
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
-use ws::listen;
 use crate::data::{Data, MessageType};
 
 mod crypto_schemes;
 mod utils;
 pub mod data;
+mod certificate;
 
-
+type ElGamalKeyPair = crate::crypto_schemes::el_gamal::KeyPair;
 fn main() {
     // let mut el_gamal = crate::crypto_schemes::el_gamal::ElGamal::new();
     // el_gamal.init();
@@ -54,17 +53,31 @@ fn main() {
     });
     use ws::{connect, CloseCode};
 
+    // let mut el_gamal = ElGamalGenerator::new();
+    // let serialized_key_pair = serde_json::to_string(&el_gamal.key_pair);
+    // let serialized_components = serde_json::to_string(&el_gamal.components);
+    //
+    // fs::write("key_pair.json", serialized_key_pair.unwrap());
+    // fs::write("components.json", serialized_components.unwrap());
+    let components: ElGamalComponents = serde_json::from_slice(fs::read("components.json").expect("Failed to open components.json").as_slice()).unwrap();
+    let key_pair: ElGamalKeyPair = serde_json::from_slice(fs::read("key_pair.json").expect("Failed to open key_pair.json").as_slice()).unwrap();
+
+    let el_gamal_signer = ElGamalSigner::from(components.clone(),key_pair.clone());
+
+    let el_gamal_data = serde_json::to_string(&MessageType::ElGamalData(components, key_pair.y)).unwrap();
+
 
     connect("ws://127.0.0.1:8001", |out| {
         //data_vec.iter().for_each(|e| out.send(serde_json::to_string(e).unwrap()).unwrap());
-        let el_gamal = ElGamalGenerator::new();
-        let test = serde_json::to_string(&MessageType::ElGamalData(el_gamal.components));
-        let _ = out.send(test.unwrap());
+
+        let _ = out.send(el_gamal_data.clone());
         move |msg| {
             println!("Got message: {}", msg);
             out.close(CloseCode::Normal)
         }
     }).unwrap();
+
+
 
     // paillier.create_shares(4u8);
     // //let mut shares: Vec<BigUint> = paillier.key_pair.get_shares().clone().iter_mut().map(|e| paillier.decrypt_share(encrypted.clone(),e.clone())).collect();

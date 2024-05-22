@@ -43,9 +43,9 @@ impl ElGamalComponents {
         rng.gen_biguint_range(&lower_bound, &upper_bound)
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct KeyPair {
-    x: BigUint, // sk Option!
+    pub x: BigUint, // sk Option!
     pub y: BigUint, // pk
 }
 
@@ -128,15 +128,16 @@ impl ElGamalVerifier {
     pub fn generate_alpha(&mut self) -> BigUint {
         self.components.generate_random(&mut self.rng)
     }
-    pub fn generate_multiple_chameleon_pks(&mut self, y: BigUint, count: usize) -> Vec<BigUint> {
+    pub fn generate_multiple_chameleon_pks(&mut self, y: BigUint, count: usize) -> (Vec<BigUint>, Vec<BigUint>) {
         let mut result = HashSet::<BigUint>::new();
-
+        let mut alphas: HashSet<BigUint> = HashSet::<BigUint>::new();
         while result.iter().count() < count {
             let alpha = self.generate_alpha();
+            alphas.insert(alpha.clone());
             result.insert(self.create_chameleon_pk(y.clone(), alpha));
         }
 
-        result.into_iter().collect()
+        (result.into_iter().collect(), alphas.into_iter().collect())
     }
     pub fn create_chameleon_pk(&mut self, y: BigUint, alpha: BigUint) -> BigUint {
         (self.components.g.modpow(&alpha, &self.components.p) * y) % &self.components.p
@@ -189,7 +190,7 @@ impl Verify for ElGamalVerifier {
         return lhs == (rhs % &modulo)
     }
 }
-
+unsafe impl Send for ElGamalGenerator {}
 
 
 pub trait ElGamalProperties {
