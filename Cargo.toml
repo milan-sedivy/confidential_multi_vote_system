@@ -21,6 +21,7 @@ tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros"] }
 env_logger = "0.11.3"
 log = "0.4.21"
 url = "2.5.0"
+rsa = { version = "0.9.6", features = ["serde"] }
 
 [[bin]]
 name = "client"
@@ -33,3 +34,7 @@ path = "src/server.rs"
 [[bin]]
 name = "tpm_fake"
 path = "src/tpm_fake.rs"
+
+[[bin]]
+name = "generate_configs"
+path = "src/generate_configs.rs"

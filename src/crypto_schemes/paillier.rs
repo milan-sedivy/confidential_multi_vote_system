@@ -19,9 +19,9 @@ pub struct PublicKey {
 }
 #[derive(Debug)]
 pub struct KeyPair {
-    pub(crate) public_key: PublicKey,
+    pub public_key: PublicKey,
     pub(crate) private_key: BigUint,
-    pub(crate) shares: Vec<BigUint>,
+    pub shares: Vec<BigUint>,
 }
 #[derive(Debug)]
 pub struct PaillierGenerator {
@@ -54,7 +54,7 @@ impl KeyPair {
 pub trait Generator {
     type Output;
     type Generator;
-    fn init(number_of_shares: u8) -> Self::Generator;
+    fn new(number_of_shares: u8) -> Self::Generator;
     //For testing purposes only
     fn from_data(components: Components, key_pair: KeyPair, number_of_shares: u8, delta: u128) -> Self::Generator;
     fn create_shares(&mut self);
@@ -87,7 +87,7 @@ impl Group for PaillierCipher {
 impl Generator for PaillierGenerator {
     type Output = BigUint;
     type Generator = Self;
-    fn init(number_of_shares: u8) -> Self {
+    fn new(number_of_shares: u8) -> Self {
         let mut rng = thread_rng();
         let one = BigUint::one();
         let two = BigUint::two();
