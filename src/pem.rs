@@ -5,7 +5,7 @@ use env_logger::{Builder, Target};
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use num_bigint::BigUint;
 use rsa::pkcs1::DecodeRsaPublicKey;
-use rsa::pkcs1v15::{Signature,VerifyingKey};
+use rsa::pss::{Signature,VerifyingKey};
 use rsa::RsaPublicKey;
 use rsa::sha2::Sha256;
 use rsa::signature::Verifier;

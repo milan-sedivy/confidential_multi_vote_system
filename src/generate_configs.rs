@@ -12,9 +12,9 @@ use std::fmt::Debug;
 use std::fs;
 use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
-use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
-use rsa::pkcs1::{DecodeRsaPrivateKey, EncodeRsaPrivateKey, EncodeRsaPublicKey, LineEnding};
-use rsa::pkcs1v15::{Signature, SigningKey};
+use rsa::{Oaep, RsaPrivateKey, RsaPublicKey};
+use rsa::pkcs1::{DecodeRsaPrivateKey, EncodeRsaPrivateKey, EncodeRsaPublicKey};
+use rsa::pss::BlindedSigningKey;
 use rsa::sha2::Sha256;
 use rsa::signature::{Keypair, RandomizedSigner, SignatureEncoding};
 use crate::crypto_schemes::el_gamal::ElGamalGenerator;
@@ -52,7 +52,7 @@ fn main() {
     let pem_rsa_sk = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate PEM private key");
     let pem_rsa_pk = RsaPublicKey::from(&pem_rsa_sk);
     let ca_rsa_private_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate CA private key");
-    let ca_rsa_sk = SigningKey::<Sha256>::new(ca_rsa_private_key);
+    let ca_rsa_sk = BlindedSigningKey::<Sha256>::new(ca_rsa_private_key);
     let ca_rsa_pk = ca_rsa_sk.verifying_key();
     let client_aes_key = Aes256Gcm::generate_key(&mut rng).as_slice().to_owned();
     let nonce = Aes256Gcm::generate_nonce(&mut rng).as_slice().to_owned();
@@ -118,9 +118,10 @@ fn main() {
     let deserialized_decrypted_subj_data : SubjData = serde_json::from_slice(&decrypted[..]).unwrap();
 
     assert_eq!(subj_data, deserialized_decrypted_subj_data, "Testing if original SubjData is equivalent to decrypted/deserialized SubjData");
-
-    let encrypted_nonce = pem_rsa_pk.encrypt(&mut rng, Pkcs1v15Encrypt, nonce.as_slice()).unwrap();
-    let encrypted_client_sk = pem_rsa_pk.encrypt(&mut rng, Pkcs1v15Encrypt, client_aes_key.as_slice()).unwrap();
+    let padding = Oaep::new::<Sha256>();
+    let encrypted_nonce = pem_rsa_pk.encrypt(&mut rng, padding, nonce.as_slice()).unwrap();
+    let padding = Oaep::new::<Sha256>();
+    let encrypted_client_sk = pem_rsa_pk.encrypt(&mut rng, padding, client_aes_key.as_slice()).unwrap();
 
     let public_key = ca_rsa_pk.to_pkcs1_der().unwrap().as_bytes().to_vec();
     let certificate = CertificateData {
