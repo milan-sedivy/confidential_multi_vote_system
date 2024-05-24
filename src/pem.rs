@@ -8,14 +8,14 @@ use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use num_bigint::BigUint;
 use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::pss::{Signature,VerifyingKey};
-use rsa::{Oaep, RsaPublicKey};
+use rsa::{Oaep, RsaPrivateKey, RsaPublicKey};
 use rsa::sha2::Sha256;
 use rsa::signature::Verifier;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
-use crate::configs::certificate::{MockCertificate, SubjData};
+use crate::configs::certificate::{CertificateData, MockCertificate, SubjData};
 use crate::configs::pem::PemConfig;
 use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalVerifier};
 mod data;
@@ -96,19 +96,8 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                             continue;
                         }
                         println!("Certificate is valid. Decrypting.");
-                        let padding = Oaep::new::<Sha256>();
                         let pem_sk = pem_config.pem_rsa_sk.clone();
-                        let decrypted_nonce = pem_sk.decrypt(
-                            padding, certificate_data.data.encrypted_nonce.as_slice()
-                        ).unwrap();
-                        let nonce = Nonce::from_slice(decrypted_nonce.as_slice());
-                        let padding = Oaep::new::<Sha256>();
-                        let decrypted_aes_key = pem_sk.decrypt(
-                            padding, certificate_data.data.encrypted_client_sk.as_slice()
-                        ).unwrap();
-                        let aes_cipher = Aes256Gcm::new_from_slice(decrypted_aes_key.as_slice()).unwrap();
-                        let serialized_subj_data = aes_cipher.decrypt(nonce, certificate_data.data.encrypted_subj_data.as_slice()).unwrap();
-                        let subj_data: SubjData = serde_json::from_slice(serialized_subj_data.as_slice()).unwrap();
+                        let subj_data = decipher_subj_data(certificate_data, pem_sk);
 
                         println!("{:?}", subj_data);
                     },
@@ -153,8 +142,20 @@ fn certificate_is_valid(certificate: MockCertificate) -> bool {
 // - Obtaining encrypted SK
 // - Deciphering SubjData with SK
 // - Obtaining ElGamal key (for encryption later on)
-fn decipher_subj_data() {
-    todo!()
+fn decipher_subj_data(certificate_data: CertificateData, pem_sk: RsaPrivateKey) -> SubjData {
+    let padding = Oaep::new::<Sha256>();
+    let decrypted_nonce= pem_sk.decrypt(
+        padding, certificate_data.data.encrypted_nonce.as_slice()
+    ).unwrap();
+    let nonce = Nonce::from_slice(decrypted_nonce.as_slice());
+    let padding = Oaep::new::<Sha256>();
+    let decrypted_aes_key= pem_sk.decrypt(
+        padding, certificate_data.data.encrypted_client_sk.as_slice()
+    ).unwrap();
+    let aes_cipher = Aes256Gcm::new_from_slice(decrypted_aes_key.as_slice()).unwrap();
+    let serialized_subj_data = aes_cipher.decrypt(nonce, certificate_data.data.encrypted_subj_data.as_slice()).unwrap();
+
+    serde_json::from_slice::<SubjData>(serialized_subj_data.as_slice()).unwrap()
 }
 
 // Create alphas and chameleon keys
