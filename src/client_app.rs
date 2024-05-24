@@ -37,8 +37,9 @@ fn main() {
 
     connect("ws://127.0.0.1:8001", |out| {
         //data_vec.iter().for_each(|e| out.send(serde_json::to_string(e).unwrap()).unwrap());
-
-        let _ = out.send(el_gamal_data.clone());
+        let cert = serde_json::from_slice(fs::read("certificate.json").unwrap().as_slice()).unwrap();
+        let msg = MessageType::Certificate(cert);
+        out.send(serde_json::to_string(&msg).unwrap()).unwrap();
         move |msg| {
             println!("Got message: {}", msg);
             out.close(CloseCode::Normal)

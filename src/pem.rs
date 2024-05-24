@@ -4,6 +4,11 @@ use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use num_bigint::BigUint;
+use rsa::pkcs1::DecodeRsaPublicKey;
+use rsa::pkcs1v15::{Signature,VerifyingKey};
+use rsa::RsaPublicKey;
+use rsa::sha2::Sha256;
+use rsa::signature::Verifier;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
@@ -61,7 +66,7 @@ async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channe
     }
 }
 
-async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>, pen_config: PemConfig) {
+async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>, pem_config: PemConfig) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     println!("Peer address: {}", addr);
 
@@ -76,9 +81,17 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
     while let Some(result) = read.next().await {
         match result {
             Ok(msg) => {
-                println!("Received a message: {}", msg);
+                //println!("Received a message: {}", msg);
                 if msg.is_empty() { break }
                 match serde_json::from_str(msg.to_text().unwrap()).unwrap() {
+                    MessageType::Certificate(certificate) => {
+                        let verifying_key: VerifyingKey<Sha256> = VerifyingKey::new(RsaPublicKey::from_pkcs1_der(&certificate.certificate.public_key).unwrap());
+                        println!("{:?}", verifying_key);
+                        let msg = serde_json::to_string(&certificate.certificate).unwrap();
+                        //println!("{:?}", msg.as_bytes());
+                        let signature = Signature::try_from(certificate.signature.as_slice()).unwrap();
+                        if verifying_key.verify(msg.as_bytes(), &signature).is_ok() {println!("Certificate is valid!")} else {println!("Not valid!")}
+                    },
                     MessageType::ElGamalData(components, pk) => {
                         //temporary for debugging purposes
 

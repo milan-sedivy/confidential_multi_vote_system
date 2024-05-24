@@ -54,6 +54,7 @@ fn main() {
     let ca_rsa_private_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate CA private key");
     let ca_rsa_sk = SigningKey::<Sha256>::new(ca_rsa_private_key);
     let ca_rsa_pk = ca_rsa_sk.verifying_key();
+    println!("{:?}", ca_rsa_pk);
     let client_aes_key = Aes256Gcm::generate_key(&mut rng).as_slice().to_owned();
     let nonce = Aes256Gcm::generate_nonce(&mut rng).as_slice().to_owned();
 
@@ -135,6 +136,7 @@ fn main() {
     };
     let binding = serde_json::to_string(&certificate).unwrap();
     let certificate_to_sign = binding.as_bytes();
+    println!("{:?}", certificate_to_sign);
     let signature = ca_rsa_sk.sign_with_rng(&mut rng, certificate_to_sign).to_vec();
 
     let certificate = MockCertificate {
