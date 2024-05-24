@@ -86,7 +86,6 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                 match serde_json::from_str(msg.to_text().unwrap()).unwrap() {
                     MessageType::Certificate(certificate) => {
                         let verifying_key: VerifyingKey<Sha256> = VerifyingKey::new(RsaPublicKey::from_pkcs1_der(&certificate.certificate.public_key).unwrap());
-                        println!("{:?}", verifying_key);
                         let msg = serde_json::to_string(&certificate.certificate).unwrap();
                         //println!("{:?}", msg.as_bytes());
                         let signature = Signature::try_from(certificate.signature.as_slice()).unwrap();
