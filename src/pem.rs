@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, fs};
 use std::io::Error;
 use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
@@ -8,9 +8,11 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
+use crate::configs::pem::PemConfig;
 use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalVerifier};
-pub mod data;
-pub mod crypto_schemes;
+mod data;
+pub mod configs;
+mod crypto_schemes;
 use crate::data::*;
 unsafe impl Send for KeyStore {}
 #[derive(Clone)]
@@ -20,10 +22,13 @@ pub struct KeyStore {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let mut builder = Builder::from_default_env();
-    builder.target(Target::Stdout);
+    // let mut builder = Builder::from_default_env();
+    // builder.target(Target::Stdout);
+    //
+    // builder.init();
 
-    builder.init();
+    // Configure the application from pem_config.json
+    let pem_config: PemConfig = serde_json::from_slice(fs::read("pem_config.json").expect("Failed to read pem_config.json").as_slice()).unwrap();
 
     let ws_server_addr = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8001".to_string());
     let voting_app_addr = env::args().nth(2).unwrap_or_else(|| "ws://127.0.0.1:8002".to_string());
@@ -39,7 +44,7 @@ async fn main() -> Result<(), Error> {
     println!("Listening on: {}", ws_server_addr);
 
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream, stdin_tx.clone()));
+        tokio::spawn(accept_connection(stream, stdin_tx.clone(), pem_config.clone()));
     }
 
     Ok(())
@@ -56,7 +61,7 @@ async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channe
     }
 }
 
-async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>) {
+async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>, pen_config: PemConfig) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     println!("Peer address: {}", addr);
 
@@ -76,12 +81,12 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                 match serde_json::from_str(msg.to_text().unwrap()).unwrap() {
                     MessageType::ElGamalData(components, pk) => {
                         //temporary for debugging purposes
-                        let generator = Arc::new(Mutex::new(ElGamalGenerator::from(components.clone())));
-                        let (keys_data, alphas_data) = create_el_gamal_keys(components, generator.lock().unwrap().key_pair.y.clone());
-                        let msg = MessageType::KeysData(keys_data);
-                        tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
-                        let msg = MessageType::KeysData(alphas_data);
-                        let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
+
+                        // let (keys_data, alphas_data) = create_el_gamal_keys(components, generator.lock().unwrap().key_pair.y.clone());
+                        // let msg = MessageType::KeysData(keys_data);
+                        // tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
+                        // let msg = MessageType::KeysData(alphas_data);
+                        // let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
                     },
                     _ => println!("Something else")
                 }

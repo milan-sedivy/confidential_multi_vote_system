@@ -1,5 +1,5 @@
+#![allow(dead_code)]
 use std::collections::HashMap;
-use std::ops::Index;
 use super::base_three::{BaseThree, BaseTen};
 
 #[derive(Debug)]
@@ -73,7 +73,7 @@ impl CandidatePool {
         }
     }
     fn cast_base_three_vote(&mut self, candidate_num: &u8, vote: &u8) {
-        if let Some(mut candidate) = self.pool.get_mut(candidate_num) {
+        if let Some(candidate) = self.pool.get_mut(candidate_num) {
             match vote {
                 2 => candidate.vote_no(),
                 1 => candidate.vote_yes(),

@@ -9,7 +9,7 @@ impl BaseThree {
     pub fn from_base_three(num: u64) -> Option<BaseThree> {
         let mut temp = num;
         while temp > 0 {
-            if (temp % 10 > 2 || temp % 10 < 0) {
+            if temp % 10 > 2 {
                 println!("Input number not in base 3");
                 return None;
             }

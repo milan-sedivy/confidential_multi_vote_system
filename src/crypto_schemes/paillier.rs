@@ -100,8 +100,9 @@ impl Generator for PaillierGenerator {
         }
         let p_sub = (&p - &one) / &two;
         let q_sub = (&q - &one) / &two;
-
+        #[allow(non_snake_case)]
         let N= &p * &q;
+        #[allow(non_snake_case)]
         let N_squared = N.pow(2);
         let m= &p_sub * &q_sub;
         let a = PaillierGenerator::get_element_of_group(&mut rng,&N);

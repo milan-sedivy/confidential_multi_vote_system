@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use super::error::CryptoError::{self, MessageOutOfBounds};
 use super::bigint::*;
 use sha256::digest;
-use crate::crypto_schemes::paillier::Components;
 
 pub struct ElGamalSigner {
     components: ElGamalComponents,

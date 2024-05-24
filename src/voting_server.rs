@@ -1,19 +1,18 @@
-// use ws::{listen, Message};
+#![allow(dead_code)]
 pub mod crypto_schemes;
 pub mod data;
-use crate::data::{Data, KeysData, MessageType};
+use crate::data::{KeysData, MessageType};
 use crate::crypto_schemes::el_gamal::*;
 use crate::crypto_schemes::bigint::*;
 use std::{
     collections::HashSet,
     env,
 };
-use std::fmt::Debug;
 use std::io::Error;
 use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
 use futures_channel::mpsc::{UnboundedSender};
-use futures_util::{SinkExt, stream::TryStreamExt, StreamExt};
+use futures_util::{StreamExt};
 use num_bigint::BigUint;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
@@ -116,7 +115,7 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                         voting_ballot.lock().unwrap().add_keys(&mut e);
                         println!("{:?}", voting_ballot.lock().unwrap().accepted_keys);
                     },
-                    MessageType::ElGamalData(mut components, pk) => {
+                    MessageType::ElGamalData(components, pk) => {
                         voting_ballot.lock().unwrap().el_gamal_verifier = Some(ElGamalVerifier::from(components));
                     },
                     MessageType::EncryptedVote(e) => {
