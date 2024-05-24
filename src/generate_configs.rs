@@ -10,8 +10,13 @@ mod crypto_schemes;
 mod configs;
 use std::fmt::Debug;
 use std::fs;
+use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
+use aes_gcm::aead::Aead;
 use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
-use rsa::pkcs1::{DecodeRsaPrivateKey, EncodeRsaPrivateKey};
+use rsa::pkcs1::{DecodeRsaPrivateKey, EncodeRsaPrivateKey, EncodeRsaPublicKey, LineEnding};
+use rsa::pkcs1v15::{Signature, SigningKey};
+use rsa::sha2::Sha256;
+use rsa::signature::{Keypair, RandomizedSigner, SignatureEncoding};
 use crate::crypto_schemes::el_gamal::ElGamalGenerator;
 use crate::configs::client::ClientConfig;
 use crate::configs::pem::PemConfig;
@@ -43,19 +48,22 @@ fn main() {
 
 
     let bits = 2048;
-    let client_rsa_sk = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
-    let client_rsa_pk = RsaPublicKey::from(&client_rsa_sk);
-    let pem_rsa_sk = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
-    let pem_rsa_pk = RsaPublicKey::from(&pem_rsa_sk);
 
+    let pem_rsa_sk = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate PEM private key");
+    let pem_rsa_pk = RsaPublicKey::from(&pem_rsa_sk);
+    let ca_rsa_private_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate CA private key");
+    let ca_rsa_sk = SigningKey::<Sha256>::new(ca_rsa_private_key);
+    let ca_rsa_pk = ca_rsa_sk.verifying_key();
+    let client_aes_key = Aes256Gcm::generate_key(&mut rng).as_slice().to_owned();
+    let nonce = Aes256Gcm::generate_nonce(&mut rng).as_slice().to_owned();
 
     let client_config: ClientConfig = ClientConfig {
         paillier_pk,
         el_gamal_kp: el_gamal_kp.clone(),
         el_gamal_components,
         pem_rsa_pk: pem_rsa_pk.clone(),
-        client_rsa_pk: client_rsa_pk.clone(),
-        client_rsa_sk: client_rsa_sk.clone(),
+        nonce: nonce.clone(),
+        client_aes_key: client_aes_key.clone()
     };
     let client_config = serde_json::to_string(&client_config).unwrap();
 
@@ -100,35 +108,48 @@ fn main() {
         el_gamal_public_key: el_gamal_kp.y.clone(),
     };
     let serialized_subj_data = serde_json::to_string(&subj_data).unwrap();
-    let encrypted_subj_data = client_rsa_pk.encrypt(&mut rng, Pkcs1v15Encrypt, serialized_subj_data.as_bytes()).unwrap();
+    let aes_cipher = Aes256Gcm::new_from_slice(client_aes_key.clone().as_slice()).unwrap();
+    let binding = nonce.clone();
+    let aes_nonce = Nonce::from_slice(binding.as_slice());
+    let encrypted_subj_data = aes_cipher.encrypt(&aes_nonce, serialized_subj_data.as_bytes()).unwrap();
 
     //test:
-    let decrypted = client_rsa_sk.decrypt(Pkcs1v15Encrypt, &encrypted_subj_data).unwrap();
+    let decrypted = aes_cipher.decrypt(&aes_nonce, encrypted_subj_data.as_slice()).unwrap();
     let deserialized_decrypted_subj_data : SubjData = serde_json::from_slice(&decrypted[..]).unwrap();
+
     assert_eq!(subj_data, deserialized_decrypted_subj_data, "Testing if original SubjData is equivalent to decrypted/deserialized SubjData");
 
-    let encrypted_der_client_sk = pem_rsa_pk.encrypt(&mut rng, Pkcs1v15Encrypt, client_rsa_sk.to_pkcs1_der().unwrap().as_bytes()).unwrap();
-    //let serialized_der_client_sk = serde_json::to_vec(&encrypted_der_client_sk).unwrap();
-    // let serialized_client_sk = serde_json::to_string(&client_rsa_sk).unwrap();
-    // let encrypted_client_sk = pem_rsa_pk.encrypt(&mut rng, Pkcs1v15Encrypt, serialized_client_sk.as_bytes()).unwrap();
-    //test:
-    //let deserialized_der_client_sk = serde_json::from_slice(&serialized_der_client_sk[..]).unwrap();//pem_rsa_sk.decrypt(Pkcs1v15Encrypt, &encrypted_client_sk).unwrap();
-    let decrypted = pem_rsa_sk.decrypt(Pkcs1v15Encrypt, &encrypted_der_client_sk).unwrap();
-    let decrypted_rsa_sk = RsaPrivateKey::from_pkcs1_der(&decrypted).unwrap();
-    assert_eq!(client_rsa_sk, decrypted_rsa_sk, "Testing if original ClientSK is equivalent to decrypted/deserialized ClientSK");
+    let encrypted_nonce = pem_rsa_pk.encrypt(&mut rng, Pkcs1v15Encrypt, nonce.as_slice()).unwrap();
+    let encrypted_client_sk = pem_rsa_pk.encrypt(&mut rng, Pkcs1v15Encrypt, client_aes_key.as_slice()).unwrap();
 
-
+    let public_key = ca_rsa_pk.to_pkcs1_der().unwrap().as_bytes().to_vec();
+    let certificate = CertificateData {
+        data: Data {
+            name: "Robert Aliceman".to_string(),
+            el_gamal_components,
+            encrypted_nonce,
+            encrypted_client_sk,
+            encrypted_subj_data,
+        },
+        public_key // CA PK
+    };
+    let binding = serde_json::to_string(&certificate).unwrap();
+    let certificate_to_sign = binding.as_bytes();
+    let signature = ca_rsa_sk.sign_with_rng(&mut rng, certificate_to_sign).to_vec();
 
     let certificate = MockCertificate {
-        certificate: CertificateData {
-            data: Data {
-                name: "Robert Aliceman".to_string(),
-                el_gamal_components,
-                encrypted_client_sk: Vec::<u8>::new(), //TODO
-                encrypted_subj_data, //TODO
-            },
-            public_key: Default::default() }, //CA PK
-        signature: "".to_string(), // CA signature
+        certificate,
+        signature, // CA signature
     };
+    let certificate = serde_json::to_string(&certificate).unwrap();
+    fs::write("certificate.json", certificate).unwrap();
 
+    println!("-------------");
+    println!("STEP3 - DONE.");
+    println!("-------------");
+
+    println!();
+    println!("All configs and the certificate have been successfully generated");
+    println!();
+    println!("-------------");
 }

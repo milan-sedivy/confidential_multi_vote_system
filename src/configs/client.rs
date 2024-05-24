@@ -10,6 +10,6 @@ pub struct ClientConfig {
     // not needed as certificate will be generated along with configs (for simplicity because it needs to be signed by a CA anyway)
     // stored only for debugging
     pub pem_rsa_pk: RsaPublicKey,
-    pub client_rsa_pk: RsaPublicKey,
-    pub client_rsa_sk: RsaPrivateKey,
+    pub nonce: Vec<u8>,
+    pub client_aes_key: Vec<u8>
 }

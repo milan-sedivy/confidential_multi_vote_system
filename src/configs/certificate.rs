@@ -4,19 +4,20 @@ use crate::crypto_schemes::el_gamal::ElGamalComponents;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MockCertificate {
     pub certificate: CertificateData,
-    pub signature: String
+    pub signature: Vec<u8>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CertificateData {
     pub data: Data,
-    pub public_key: BigUint,
+    pub public_key: Vec<u8>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Data {
     pub name: String,
     pub el_gamal_components: ElGamalComponents,
+    pub encrypted_nonce: Vec<u8>,
     pub encrypted_client_sk: Vec<u8>,
     pub encrypted_subj_data: Vec<u8>,
 }
