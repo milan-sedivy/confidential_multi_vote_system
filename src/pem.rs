@@ -9,7 +9,6 @@ use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
 use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalVerifier};
-mod certificate;
 pub mod data;
 pub mod crypto_schemes;
 use crate::data::*;

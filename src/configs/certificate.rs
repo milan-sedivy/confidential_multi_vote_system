@@ -17,10 +17,11 @@ pub struct CertificateData {
 pub struct Data {
     pub name: String,
     pub el_gamal_components: ElGamalComponents,
-    pub encrypted_subj_data: SubjData,
+    pub encrypted_client_sk: Vec<u8>,
+    pub encrypted_subj_data: Vec<u8>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct SubjData {
     pub share_count: usize,
     pub el_gamal_public_key: BigUint,

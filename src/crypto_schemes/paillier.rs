@@ -132,11 +132,11 @@ impl Generator for PaillierGenerator {
         for _i in 1u8..self.number_of_shares {
             coefficients.push(self.rng.gen_biguint_range(&BigUint::one(), &upper_bound));
         }
-        println!("Number of coefficients: {}", coefficients.len());
+        println!("= Number of coefficients: {}", coefficients.len());
         for i in 0..=coefficients.len() {
             shares.push(self.f(BigUint::from(i+1), &coefficients));
         }
-        println!("Number of total shares: {}", shares.len());
+        println!("= Number of secret shares: {}", shares.len());
         self.key_pair.shares = shares;
     }
     fn f(&self, x: BigUint, coefficients: &Vec<BigUint>) -> BigUint {

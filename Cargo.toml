@@ -22,18 +22,19 @@ env_logger = "0.11.3"
 log = "0.4.21"
 url = "2.5.0"
 rsa = { version = "0.9.6", features = ["serde"] }
+aes = "0.8.4"
 
 [[bin]]
-name = "client"
-path = "src/main.rs"
+name = "client_app"
+path = "src/client_app.rs"
 
 [[bin]]
-name = "server"
-path = "src/server.rs"
+name = "voting_server"
+path = "src/voting_server.rs"
 
 [[bin]]
-name = "tpm_fake"
-path = "src/tpm_fake.rs"
+name = "pem_server"
+path = "src/pem.rs"
 
 [[bin]]
 name = "generate_configs"
