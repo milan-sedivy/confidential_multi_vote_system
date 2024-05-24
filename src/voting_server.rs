@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 pub mod crypto_schemes;
-pub mod data;
+mod data;
+mod configs;
 use crate::data::{KeysData, MessageType};
 use crate::crypto_schemes::el_gamal::*;
 use crate::crypto_schemes::bigint::*;

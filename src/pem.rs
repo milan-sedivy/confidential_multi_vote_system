@@ -11,7 +11,7 @@ use url::Url;
 use crate::configs::pem::PemConfig;
 use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalVerifier};
 mod data;
-pub mod configs;
+mod configs;
 mod crypto_schemes;
 use crate::data::*;
 unsafe impl Send for KeyStore {}
