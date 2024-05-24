@@ -124,7 +124,7 @@ fn main() {
     let encrypted_client_sk = pem_rsa_pk.encrypt(&mut rng, padding, client_aes_key.as_slice()).unwrap();
 
     let public_key = ca_rsa_pk.to_pkcs1_der().unwrap().as_bytes().to_vec();
-    let certificate = CertificateData {
+    let certificate_data = CertificateData {
         data: Data {
             name: "Robert Aliceman".to_string(),
             el_gamal_components,
@@ -134,12 +134,12 @@ fn main() {
         },
         public_key // CA PK
     };
-    let binding = serde_json::to_string(&certificate).unwrap();
+    let binding = serde_json::to_string(&certificate_data).unwrap();
     let certificate_to_sign = binding.as_bytes();
     let signature = ca_rsa_sk.sign_with_rng(&mut rng, certificate_to_sign).to_vec();
 
     let certificate = MockCertificate {
-        certificate,
+        certificate_data,
         signature, // CA signature
     };
     let certificate = serde_json::to_string(&certificate).unwrap();

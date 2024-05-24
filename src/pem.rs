@@ -1,18 +1,21 @@
 use std::{env, fs};
 use std::io::Error;
 use std::sync::{Arc, Mutex};
+use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
+use aes_gcm::aead::Aead;
 use env_logger::{Builder, Target};
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
 use num_bigint::BigUint;
 use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::pss::{Signature,VerifyingKey};
-use rsa::RsaPublicKey;
+use rsa::{Oaep, RsaPublicKey};
 use rsa::sha2::Sha256;
 use rsa::signature::Verifier;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
+use crate::configs::certificate::{MockCertificate, SubjData};
 use crate::configs::pem::PemConfig;
 use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalVerifier};
 mod data;
@@ -85,11 +88,29 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                 if msg.is_empty() { break }
                 match serde_json::from_str(msg.to_text().unwrap()).unwrap() {
                     MessageType::Certificate(certificate) => {
-                        let verifying_key: VerifyingKey<Sha256> = VerifyingKey::new(RsaPublicKey::from_pkcs1_der(&certificate.certificate.public_key).unwrap());
-                        let msg = serde_json::to_string(&certificate.certificate).unwrap();
-                        //println!("{:?}", msg.as_bytes());
-                        let signature = Signature::try_from(certificate.signature.as_slice()).unwrap();
-                        if verifying_key.verify(msg.as_bytes(), &signature).is_ok() {println!("Certificate is valid!")} else {println!("Not valid!")}
+                        let certificate_data = certificate.certificate_data.clone();
+                        if !certificate_is_valid(certificate) {
+                            println!("Invalid certificate. Denying request.");
+                            let msg = MessageType::GenericMessage(String::from("Request denied"));
+                            let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
+                            continue;
+                        }
+                        println!("Certificate is valid. Decrypting.");
+                        let padding = Oaep::new::<Sha256>();
+                        let pem_sk = pem_config.pem_rsa_sk.clone();
+                        let decrypted_nonce = pem_sk.decrypt(
+                            padding, certificate_data.data.encrypted_nonce.as_slice()
+                        ).unwrap();
+                        let nonce = Nonce::from_slice(decrypted_nonce.as_slice());
+                        let padding = Oaep::new::<Sha256>();
+                        let decrypted_aes_key = pem_sk.decrypt(
+                            padding, certificate_data.data.encrypted_client_sk.as_slice()
+                        ).unwrap();
+                        let aes_cipher = Aes256Gcm::new_from_slice(decrypted_aes_key.as_slice()).unwrap();
+                        let serialized_subj_data = aes_cipher.decrypt(nonce, certificate_data.data.encrypted_subj_data.as_slice()).unwrap();
+                        let subj_data: SubjData = serde_json::from_slice(serialized_subj_data.as_slice()).unwrap();
+
+                        println!("{:?}", subj_data);
                     },
                     MessageType::ElGamalData(components, pk) => {
                         //temporary for debugging purposes
@@ -119,8 +140,12 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
 
 
 // Verify signature on ceritficate
-fn verify_certificate() {
-    todo!()
+fn certificate_is_valid(certificate: MockCertificate) -> bool {
+    let verifying_key: VerifyingKey<Sha256> = VerifyingKey::new(RsaPublicKey::from_pkcs1_der(&certificate.certificate_data.public_key).unwrap());
+    let msg = serde_json::to_string(&certificate.certificate_data).unwrap();
+    let signature = Signature::try_from(certificate.signature.as_slice()).unwrap();
+
+    verifying_key.verify(msg.as_bytes(), &signature).is_ok()
 }
 
 //Decipher the incoming SubjData using your own key

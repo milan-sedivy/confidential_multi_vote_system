@@ -29,6 +29,7 @@ pub enum MessageType {
     KeysData(KeysData),
     ElGamalData(ElGamalComponents, BigUint),
     Certificate(MockCertificate),
+    GenericMessage(String),
     Nothing
 }
 

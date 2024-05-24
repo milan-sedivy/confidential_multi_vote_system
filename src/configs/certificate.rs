@@ -3,17 +3,17 @@ use serde::{Deserialize, Serialize};
 use crate::crypto_schemes::el_gamal::ElGamalComponents;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MockCertificate {
-    pub certificate: CertificateData,
+    pub certificate_data: CertificateData,
     pub signature: Vec<u8>
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CertificateData {
     pub data: Data,
     pub public_key: Vec<u8>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Data {
     pub name: String,
     pub el_gamal_components: ElGamalComponents,
