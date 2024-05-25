@@ -114,8 +114,8 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                         let mut el_gamal_cipher: ElGamalCipher = ElGamalCipher::from(el_gamal_components.clone(), KeyPair {x: BigUint::zero(), y: subj_data.el_gamal_public_key.clone()});
                         let (mut keys_data, alphas_data) = create_el_gamal_keys(el_gamal_components, subj_data.el_gamal_public_key.clone(), subj_data.share_count);
 
-                        // let msg = MessageType::KeysData(keys_data);
-                        // tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
+                        let msg = MessageType::KeysData(keys_data.clone());
+                        tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
                         key_store.lock().unwrap().voters_pk.append(&mut keys_data.el_gamal_pks);
                         info!("Encrypting alphas using users ElGamal PK: {:?}", BetterFormattingVec(&alphas_data));
                         let encrypted_alphas: Vec<EncryptedMessage> = alphas_data.into_iter().map(|alpha| el_gamal_cipher.encrypt(alpha).unwrap_or_else(|e| {error!("Failed to encrypt alphas."); panic!("{:?}", e)})).collect();

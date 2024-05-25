@@ -13,7 +13,7 @@ pub struct Data {
     pub(crate) delta: u128
 }
 //To be sent from PEM to the voting_server
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeysData {
     pub el_gamal_pks: Vec<BigUint>,
 }
@@ -44,7 +44,8 @@ pub enum MessageType {
     EncryptedAlphas(EncryptedAlphas),
  //   ElGamalData(ElGamalComponents, BigUint),
     Certificate(MockCertificate), //Sent by client to pem server
-    KeyRequest, //Sent by voting_server to pem_server
+ //   KeyRequest, //Sent by voting_server to pem_server
+    DecryptionRequest,
     GenericMessage(String),
     Nothing
 }

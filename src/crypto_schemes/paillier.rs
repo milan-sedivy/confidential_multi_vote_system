@@ -40,7 +40,7 @@ pub struct PaillierCipher {
     delta: u128
 }
 
-pub struct Combiner {
+pub struct PaillierCombiner {
     public_key: PublicKey,
     decrypted_message_shares: Vec<BigUint>,
     delta: u128
@@ -93,11 +93,11 @@ impl Generator for PaillierGenerator {
         let one = BigUint::one();
         let two = BigUint::two();
 
-        let p: BigUint = rng.gen_safe_prime(256);
-        let mut q: BigUint = rng.gen_safe_prime(256);
+        let p: BigUint = rng.gen_safe_prime(1024);
+        let mut q: BigUint = rng.gen_safe_prime(1024);
         while p.eq(&q)
         {
-            q = rng.gen_safe_prime(256);
+            q = rng.gen_safe_prime(1024);
         }
         let p_sub = (&p - &one) / &two;
         let q_sub = (&q - &one) / &two;
@@ -165,7 +165,7 @@ impl Cipher for PaillierCipher {
         let modulo = modulo.pow(2);
         (&self.public_key.g.modpow(&message,&modulo) * x.modpow(&self.public_key.N, &modulo)) % modulo
     }
-    #[inline]
+
     fn decrypt_share(&mut self, message: BigUint) -> BigUint {
         message.modpow(&(BigUint::from(2*self.delta)*&self.secret_share), &self.public_key.N.pow(2))
     }
@@ -177,13 +177,16 @@ impl PaillierCipher {
         Self {rng, public_key: public_key.clone(), secret_share: secret_share.clone(), delta }
     }
 }
-impl Combiner {
+impl PaillierCombiner {
     pub fn init_from(public_key: &PublicKey, delta: u128) -> Self {
         let decrypted_message_shares = Vec::<BigUint>::new();
         Self {public_key: public_key.clone(), decrypted_message_shares, delta }
     }
     pub fn add_decrypted_message_share(&mut self, decrypted_share: BigUint) {
         self.decrypted_message_shares.push(decrypted_share);
+    }
+    pub fn add_all_shares(&mut self, decrypted_shares: Vec<BigUint>) {
+        decrypted_shares.into_iter().for_each(|e| self.add_decrypted_message_share(e));
     }
     pub fn combine_shares(&mut self) -> BigUint {
         println!("{:?}", self.decrypted_message_shares);

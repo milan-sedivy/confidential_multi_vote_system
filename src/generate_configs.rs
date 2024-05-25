@@ -58,7 +58,7 @@ fn main() {
     let nonce = Aes256Gcm::generate_nonce(&mut rng).as_slice().to_owned();
 
     let client_config: ClientConfig = ClientConfig {
-        paillier_pk,
+        paillier_pk: paillier_pk.clone(),
         el_gamal_kp: el_gamal_kp.clone(),
         el_gamal_components,
         pem_rsa_pk: pem_rsa_pk.clone(),
@@ -87,6 +87,7 @@ fn main() {
     let delta = paillier_generator.delta;
     let voting_server_config = VotingServerConfig {
         el_gamal_components: el_gamal_generator.components,
+        paillier_pk,
         paillier_sk_shares,
         delta,
     };

@@ -16,7 +16,7 @@ use log::{error, info, LevelFilter, warn};
 use log::LevelFilter::Info;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use crate::data::MessageType::GenericMessage;
+use crate::data::MessageType::{EncryptedVote, GenericMessage};
 use crate::utils::base_three::{BaseTen, BaseThree};
 
 mod crypto_schemes;
@@ -25,7 +25,7 @@ mod data;
 mod configs;
 type ElGamalKeyPair = crate::crypto_schemes::el_gamal::KeyPair;
 
-const M: u64 = 100;
+const M: u64 = 11;
 #[tokio::main]
 async fn main() {
     let mut builder = Builder::new();
@@ -70,8 +70,7 @@ async fn main() {
             ).collect();
             info!("Decrypted and obtained original alphas: {:?}", BetterFormattingVec(&alphas));
             info!("Client application is fully setup, you can proceed with voting.");
-            let divider = "-".repeat(50);
-            println!("{}", divider);
+            print_divider();
             tokio::spawn(read_stdin(stdin_tx,paillier_cipher,elgamal_signer, alphas));
             let _= write.close().await;
         },
@@ -129,14 +128,26 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut pai
     // not safe
     let vote = BigUint::from(M).pow(votes_base_ten as u32);
 
-    let vote_message: Vec<VoteData> = alphas.into_iter().map(|alpha| {
+    let vote_messages: Vec<MessageType> = alphas.into_iter().map(|alpha| {
         let encrypted_vote = paillier_cipher.encrypt(vote.clone());
         let el_gamal_signature = el_gamal_signer.sign_using_alpha(&alpha, encrypted_vote.to_string());
-        VoteData {
+        EncryptedVote(VoteData {
             encrypted_vote,
             el_gamal_signature
-        }
+        })
     }).collect();
+    vote_messages.iter().for_each(|vote_message|{tx.unbounded_send(Message::from(serde_json::to_string(&vote_message).unwrap())).unwrap();});
+    print_divider();
 
-    tx.unbounded_send(Message::from(serde_json::to_string(&vote_message).unwrap())).unwrap();
+    let mut buf = vec![0; 1024];
+    let n = match stdin.read(&mut buf).await {
+        Err(_) => {error!("Reading stdin failed."); panic!();},
+        Ok(n) => n,
+    };
+    tx.unbounded_send(Message::from(serde_json::to_string(&MessageType::DecryptionRequest).unwrap())).unwrap();
+}
+
+fn print_divider() {
+    let divider = "-".repeat(50);
+    println!("{}", divider);
 }

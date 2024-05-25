@@ -5,18 +5,19 @@ mod configs;
 use crate::data::{KeysData, MessageType};
 use crate::crypto_schemes::el_gamal::*;
 use crate::crypto_schemes::bigint::*;
-use std::{
-    collections::HashSet,
-    env,
-};
+use std::{collections::HashSet, env, fs};
+use std::fmt::Debug;
 use std::io::Error;
 use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
 use futures_channel::mpsc::{UnboundedSender};
 use futures_util::{StreamExt};
+use log::error;
 use num_bigint::BigUint;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
+use crate::configs::voting_server::VotingServerConfig;
+use crate::crypto_schemes::paillier::{PaillierCipher, PaillierCombiner, Cipher};
 
 type Tx = UnboundedSender<Message>;
 #[derive(Clone)]
@@ -79,7 +80,11 @@ async fn main() -> Result<(), Error> {
     builder.target(Target::Stdout);
 
     builder.init();
+    let voting_server_config = fs::read("voting_server_config.json").unwrap_or_else(|e| { error!("Failed to read voting_server_config.json"); panic!("{}", e)});
+    let voting_server_config: VotingServerConfig = serde_json::from_slice(&voting_server_config[..]).unwrap_or_else(|e| { error!("Failed to deserialize voting server config"); panic!("{}", e)});
     let voting_ballot = Arc::new(Mutex::new(SharedVotes::new()));
+    voting_ballot.lock().unwrap().init_verifier(voting_server_config.el_gamal_components.clone());
+
     let addr = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8002".to_string());
 
     // Create the event loop and TCP listener we'll accept connections on.
@@ -88,13 +93,13 @@ async fn main() -> Result<(), Error> {
     println!("Listening on: {}", addr);
 
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream, voting_ballot.clone()));
+        tokio::spawn(accept_connection(stream, voting_ballot.clone(), voting_server_config.clone()));
     }
 
     Ok(())
 }
 
-async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVotes>>) {
+async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVotes>>, voting_server_config: VotingServerConfig) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     println!("Peer address: {}", addr);
 
@@ -109,16 +114,13 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
     while let Some(result) = read.next().await {
         match result {
             Ok(msg) => {
-                println!("Received a message: {}", msg);
+                //println!("Received a message: {}", msg);
                 match serde_json::from_str(msg.to_text().unwrap()).unwrap_or(MessageType::Nothing) {
                     MessageType::KeysData(mut e) => {
                         //println!("KeysData: {:?}", e)
                         voting_ballot.lock().unwrap().add_keys(&mut e);
                         println!("{:?}", voting_ballot.lock().unwrap().accepted_keys);
                     },
-                    // MessageType::ElGamalData(components, pk) => {
-                    //     voting_ballot.lock().unwrap().el_gamal_verifier = Some(ElGamalVerifier::from(components));
-                    // },
                     MessageType::EncryptedVote(e) => {
                         if voting_ballot.lock().unwrap().check_and_remove_key(e.encrypted_vote.to_string(), e.el_gamal_signature.clone()) {
                             println!("{}", voting_ballot.lock().unwrap().encrypted_tally);
@@ -128,7 +130,19 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                                 voting_ballot.lock().unwrap().encrypted_tally *= e.encrypted_vote;
                             }
                         }
-                        println!("{}", voting_ballot.lock().unwrap().encrypted_tally);
+                        //println!("{}", voting_ballot.lock().unwrap().encrypted_tally);
+                    },
+                    MessageType::DecryptionRequest => {
+                        let mut paillier_combiner = PaillierCombiner::init_from(&voting_server_config.paillier_pk.clone(), voting_server_config.delta.clone());
+
+                        let encrypted_tally_copy = voting_ballot.lock().unwrap().encrypted_tally.clone();
+                        let shares = voting_server_config.paillier_sk_shares.clone();
+                        let decrypted_shares: Vec<BigUint> = shares.iter().map(|share| {
+                            let mut paillier_cipher = PaillierCipher::init_from(&voting_server_config.paillier_pk.clone(), share, voting_server_config.delta.clone());
+                            paillier_cipher.decrypt_share(encrypted_tally_copy.clone())
+                        }).collect();
+                        paillier_combiner.add_all_shares(decrypted_shares);
+                        println!("combined shares: {:?}",paillier_combiner.combine_shares());
                     }
                     _ => {}
                 }
