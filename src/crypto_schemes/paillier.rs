@@ -3,7 +3,7 @@ use num_prime::RandPrime;
 use rand::prelude::ThreadRng;
 use rand::thread_rng;
 use serde::{Deserialize, Serialize};
-use crate::crypto_schemes::bigint::{UsefulOperations, UsefulConstants, ModSub};
+use crate::crypto_schemes::bigint::{UsefulOperations, UsefulConstants};
 #[derive(Debug)]
 pub struct Components {
     pub p: BigUint,
@@ -12,6 +12,7 @@ pub struct Components {
     pub q_sub: BigUint,
 }
 #[derive(Clone,Debug, Serialize, Deserialize)]
+#[allow(non_snake_case)]
 pub struct PublicKey {
     pub N: BigUint,
     pub g: BigUint,
@@ -23,6 +24,14 @@ pub struct KeyPair {
     pub(crate) private_key: BigUint,
     pub shares: Vec<BigUint>,
 }
+#[allow(dead_code)]
+impl KeyPair {
+    pub fn borrow_pk(&self) -> &PublicKey {
+        &self.public_key
+    }
+    pub fn get_shares(&self) -> &Vec<BigUint> {&self.shares}
+}
+
 #[derive(Debug)]
 pub struct PaillierGenerator {
     pub components: Components,
@@ -45,13 +54,6 @@ pub struct PaillierCombiner {
     decrypted_message_shares: Vec<BigUint>,
     delta: u128
 }
-impl KeyPair {
-    pub fn borrow_pk(&self) -> &PublicKey {
-        &self.public_key
-    }
-    pub fn get_shares(&self) -> &Vec<BigUint> {&self.shares}
-}
-
 pub trait Generator {
     type Output;
     type Generator;
@@ -110,7 +112,7 @@ impl Generator for PaillierGenerator {
         let b = PaillierGenerator::get_element_of_group(&mut rng,&N);
         let beta = PaillierGenerator::get_element_of_group(&mut rng,&N);
 
-        let mut g: BigUint = ((&N+&one).modpow(&a, &N_squared)*(&b.modpow(&N,&N_squared))) % &N_squared;
+        let g: BigUint = ((&N+&one).modpow(&a, &N_squared)*(&b.modpow(&N,&N_squared))) % &N_squared;
 
         let sigma =&a*&m*&beta % &N;
         let public_key = PublicKey {N: N.clone(), g, sigma};
@@ -122,7 +124,7 @@ impl Generator for PaillierGenerator {
         PaillierGenerator {components, key_pair: KeyPair {public_key, private_key, shares: Vec::<BigUint>::new()}, rng, number_of_shares, delta}
     }
     fn from_data(components: Components, key_pair: KeyPair, number_of_shares: u8, delta: u128) -> Self {
-        let mut rng = thread_rng();
+        let rng = thread_rng();
 
         PaillierGenerator { components, key_pair, rng, number_of_shares, delta}
     }
@@ -161,7 +163,7 @@ impl Cipher for PaillierCipher {
     type Output = BigUint;
     fn encrypt(&mut self, message: BigUint) -> BigUint {
         let modulo = &self.public_key.N;
-        let mut x = PaillierCipher::get_element_of_group(&mut self.rng, &modulo);
+        let x = PaillierCipher::get_element_of_group(&mut self.rng, &modulo);
         let modulo = modulo.pow(2);
         (&self.public_key.g.modpow(&message,&modulo) * x.modpow(&self.public_key.N, &modulo)) % modulo
     }
@@ -170,13 +172,14 @@ impl Cipher for PaillierCipher {
         message.modpow(&(BigUint::from(2*self.delta)*&self.secret_share), &self.public_key.N.pow(2))
     }
 }
-
+#[allow(dead_code)]
 impl PaillierCipher {
     pub fn init_from(public_key: &PublicKey, secret_share: &BigUint, delta: u128) -> Self {
         let rng = thread_rng();
         Self {rng, public_key: public_key.clone(), secret_share: secret_share.clone(), delta }
     }
 }
+#[allow(dead_code)]
 impl PaillierCombiner {
     pub fn init_from(public_key: &PublicKey, delta: u128) -> Self {
         let decrypted_message_shares = Vec::<BigUint>::new();
@@ -209,7 +212,7 @@ impl PaillierCombiner {
         (self.L(&(&inner_element % &self.public_key.N.pow(2))) * inv) % &self.public_key.N
     }
     fn calculate_micro(&mut self, k: usize) -> BigInt {
-        let mut micro = (self.delta as i128);
+        let mut micro = self.delta as i128;
 
         for l in 1..=self.decrypted_message_shares.len() {
             if l == k { continue }

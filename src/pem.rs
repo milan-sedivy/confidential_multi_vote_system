@@ -3,8 +3,8 @@ use std::io::Error;
 use std::sync::{Arc, Mutex};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
-use env_logger::{Builder, builder, Target};
-use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use env_logger::{Builder, Target};
+use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
 use log::LevelFilter::Info;
 use num_bigint::BigUint;
@@ -20,7 +20,7 @@ use url::Url;
 use crate::configs::certificate::{CertificateData, MockCertificate, SubjData};
 use crate::configs::pem::PemConfig;
 use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
-use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalGenerator, ElGamalVerifier, KeyPair, Encryption, EncryptedMessage};
+use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalVerifier, KeyPair, Encryption, EncryptedMessage};
 mod data;
 mod configs;
 mod crypto_schemes;
@@ -74,7 +74,7 @@ async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channe
     while let Some(message) = rx.next().await {
         // rx.map(Ok).forward(voting_app_write).await?;
         info!("msg to be sent: {}", message);
-        voting_app_write.send(message).await;
+        let _ = voting_app_write.send(message).await;
     }
 }
 
@@ -82,7 +82,7 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     info!("Peer address: {}", addr);
 
-    let mut ws_stream = tokio_tungstenite::accept_async(stream)
+    let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("Error during the websocket handshake occurred");
 

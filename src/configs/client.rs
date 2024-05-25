@@ -1,4 +1,4 @@
-use rsa::{RsaPrivateKey, RsaPublicKey};
+use rsa::{RsaPublicKey};
 use serde::{Deserialize, Serialize};
 use crate::crypto_schemes::el_gamal::ElGamalComponents;
 

@@ -1,23 +1,20 @@
 #![allow(dead_code)]
 use std::fs;
 use num_bigint::{BigUint};
-use rand::thread_rng;
-use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalSigner, Encryption, Signature};
+use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalSigner, Encryption, Signature};
 use crate::crypto_schemes::paillier::{Cipher, PaillierCipher};
 
 use crate::configs::client::ClientConfig;
-use crate::data::{MessageType, KeysData, VoteData};
+use crate::data::{MessageType, VoteData};
 use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
-use std::env;
-use std::future::Future;
 use env_logger::{Builder, Target};
 use futures_util::{future, pin_mut, SinkExt, StreamExt};
-use log::{error, info, LevelFilter, warn};
+use log::{error, info, warn};
 use log::LevelFilter::Info;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use crate::data::MessageType::{EncryptedVote, GenericMessage};
-use crate::utils::base_three::{BaseTen, BaseThree};
+use crate::data::MessageType::{EncryptedVote};
+use crate::utils::base_three::{BaseTen};
 
 mod crypto_schemes;
 mod utils;
@@ -34,10 +31,9 @@ async fn main() {
 
     builder.init();
 
-    let mut rng = thread_rng();
     let client_config: ClientConfig = serde_json::from_slice(fs::read("client_config.json").unwrap_or_else(|e| { error!("Failed to open client_config.json"); panic!("{}", e) } ).as_slice()).unwrap();
     // To encrypt we don't need a share or delta
-    let mut paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
+    let paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
     let elgamal_signer = ElGamalSigner::from(client_config.el_gamal_components.clone(), client_config.el_gamal_kp.clone());
     let mut elgamal_cipher: ElGamalCipher = ElGamalCipher::from(client_config.el_gamal_components, client_config.el_gamal_kp.clone());
     let url = url::Url::parse("ws://127.0.0.1:8001").unwrap();
@@ -78,7 +74,7 @@ async fn main() {
     }
     let url = url::Url::parse("ws://127.0.0.1:8002").unwrap();
     let (ws_stream, _) = connect_async(url).await.unwrap_or_else(|e| { error!("Failed to connect"); panic!("{}", e) });
-    let (mut write, mut read) = ws_stream.split();
+    let (write, read) = ws_stream.split();
 
     let stdin_to_ws = stdin_rx.map(Ok).forward(write);
     let ws_to_stdout = {
@@ -140,7 +136,7 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut pai
     print_divider();
 
     let mut buf = vec![0; 1024];
-    let n = match stdin.read(&mut buf).await {
+    match stdin.read(&mut buf).await {
         Err(_) => {error!("Reading stdin failed."); panic!();},
         Ok(n) => n,
     };

@@ -1,7 +1,7 @@
 use std::fmt;
 use num_bigint::BigUint;
 use serde::{Deserialize, Serialize};
-use crate::crypto_schemes::el_gamal::{ElGamalComponents, EncryptedMessage};
+use crate::crypto_schemes::el_gamal::{EncryptedMessage};
 use crate::crypto_schemes::paillier::PublicKey;
 use super::configs::certificate::MockCertificate;
 //Not used currently, maybe later ... currently we will assume that everyone has already shared their

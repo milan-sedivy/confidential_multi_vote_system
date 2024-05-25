@@ -19,6 +19,7 @@ pub struct ElGamalVerifier {
     components: ElGamalComponents,
     rng: ThreadRng,
 }
+#[allow(dead_code)]
 pub struct ElGamalGenerator {
     pub components: ElGamalComponents,
     pub key_pair: KeyPair,
@@ -50,7 +51,7 @@ pub struct KeyPair {
     pub y: BigUint, // pk
 }
 
-
+#[allow(dead_code)]
 impl ElGamalGenerator {
     pub fn new() -> Self {
         let mut rng = thread_rng();
@@ -98,6 +99,7 @@ impl ElGamalGenerator {
     }
 
 }
+#[allow(dead_code)]
 impl ElGamalSigner {
 
     pub fn from(components: ElGamalComponents, key_pair: KeyPair) -> Self {
@@ -111,6 +113,7 @@ impl ElGamalSigner {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EncryptedMessage(BigUint, BigUint);
+#[allow(dead_code)]
 impl ElGamalCipher {
     pub fn from(components: ElGamalComponents, key_pair: KeyPair) -> Self {
         ElGamalCipher {
@@ -120,6 +123,7 @@ impl ElGamalCipher {
         }
     }
 }
+#[allow(dead_code)]
 impl ElGamalVerifier {
     pub fn from(components: ElGamalComponents) -> Self {
         ElGamalVerifier {
@@ -188,8 +192,8 @@ impl Signature for ElGamalSigner {
 }
 impl Verify for ElGamalVerifier {
     fn verify(&mut self, message: String, y: &BigUint,  signature: (BigUint, BigUint)) -> bool {
-        if (signature.0 == BigUint::zero() || signature.0 > self.components.p) { return false }
-        if (signature.1 == BigUint::zero() || signature.1 > (&self.components.p - BigUint::one())) { return false }
+        if signature.0 == BigUint::zero() || signature.0 > self.components.p { return false }
+        if signature.1 == BigUint::zero() || signature.1 > (&self.components.p - BigUint::one()) { return false }
         let hash_dec = hash(message);
         let modulo = self.components.p.clone();
 

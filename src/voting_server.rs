@@ -6,7 +6,6 @@ use crate::data::{KeysData, MessageType};
 use crate::crypto_schemes::el_gamal::*;
 use crate::crypto_schemes::bigint::*;
 use std::{collections::HashSet, env, fs};
-use std::fmt::Debug;
 use std::io::Error;
 use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
@@ -105,13 +104,12 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     info!("Peer address: {}", addr);
 
-    let mut ws_stream = tokio_tungstenite::accept_async(stream)
+    let ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("Error during the websocket handshake occurred");
 
     info!("New WebSocket connection: {}", addr);
-    let msg = Message::from("Hello world");
-    let (write, mut read) = ws_stream.split();
+    let (_write, mut read) = ws_stream.split();
 
     while let Some(result) = read.next().await {
         match result {
