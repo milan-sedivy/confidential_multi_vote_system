@@ -73,7 +73,7 @@ async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channe
 
     while let Some(message) = rx.next().await {
         // rx.map(Ok).forward(voting_app_write).await?;
-        info!("msg to be sent: {}", message);
+        info!("Sending message to voting server: {}", message);
         let _ = voting_app_write.send(message).await;
     }
 }

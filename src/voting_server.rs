@@ -119,7 +119,7 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                     MessageType::KeysData(mut e) => {
                         //println!("KeysData: {:?}", e)
                         voting_ballot.lock().unwrap().add_keys(&mut e);
-                        info!("{:?}", voting_ballot.lock().unwrap().accepted_keys);
+                        info!("Accepted keys: {:?}", BetterFormattingVec(&voting_ballot.lock().unwrap().accepted_keys.clone().into_iter().collect()));
                     },
                     MessageType::EncryptedVote(e) => {
                         if voting_ballot.lock().unwrap().check_and_remove_key(e.encrypted_vote.to_string(), e.el_gamal_signature.clone()) {

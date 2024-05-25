@@ -192,7 +192,6 @@ impl PaillierCombiner {
         decrypted_shares.into_iter().for_each(|e| self.add_decrypted_message_share(e));
     }
     pub fn combine_shares(&mut self) -> BigUint {
-        println!("{:?}", self.decrypted_message_shares);
         let inner_element: BigUint = self.decrypted_message_shares.clone().iter().enumerate().map(|(k, c_k)| {
             let micro = &self.calculate_micro(k.clone()+1);
             match micro >= &BigInt::from(0) {
