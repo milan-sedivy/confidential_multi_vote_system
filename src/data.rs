@@ -24,12 +24,13 @@ pub struct VoteData {
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MessageType {
-    EncryptedVote(VoteData),
-    PailierData(Data),
-    KeysData(KeysData),
-    ElGamalData(ElGamalComponents, BigUint),
-    Certificate(MockCertificate),
+    EncryptedVote(VoteData), //Sent by client to voting_server
+ //   PailierData(Data),
+    KeysData(KeysData), //Used by pem_server to communicate with client and voting_server
+ //   ElGamalData(ElGamalComponents, BigUint),
+    Certificate(MockCertificate), //Sent by client to pem server
+    KeyRequest, //Sent by voting_server to pem_server
     GenericMessage(String),
-    Nothing
+    Nothing 
 }
 

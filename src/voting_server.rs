@@ -116,9 +116,9 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                         voting_ballot.lock().unwrap().add_keys(&mut e);
                         println!("{:?}", voting_ballot.lock().unwrap().accepted_keys);
                     },
-                    MessageType::ElGamalData(components, pk) => {
-                        voting_ballot.lock().unwrap().el_gamal_verifier = Some(ElGamalVerifier::from(components));
-                    },
+                    // MessageType::ElGamalData(components, pk) => {
+                    //     voting_ballot.lock().unwrap().el_gamal_verifier = Some(ElGamalVerifier::from(components));
+                    // },
                     MessageType::EncryptedVote(e) => {
                         if voting_ballot.lock().unwrap().check_and_remove_key(e.encrypted_vote.to_string(), e.el_gamal_signature.clone()) {
                             println!("{}", voting_ballot.lock().unwrap().encrypted_tally);

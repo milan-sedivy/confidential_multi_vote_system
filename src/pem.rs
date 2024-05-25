@@ -25,9 +25,12 @@ use crate::data::*;
 unsafe impl Send for KeyStore {}
 #[derive(Clone)]
 pub struct KeyStore {
-    pub voters_pk: BigUint,
+    pub voters_pk: Vec<BigUint>,
 }
-
+impl KeyStore {
+    fn new() -> Self { Self {voters_pk: Vec::<BigUint>::new()} }
+}
+type KS = Arc<Mutex<KeyStore>>;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     // let mut builder = Builder::from_default_env();
@@ -37,6 +40,7 @@ async fn main() -> Result<(), Error> {
 
     // Configure the application from pem_config.json
     let pem_config: PemConfig = serde_json::from_slice(fs::read("pem_config.json").expect("Failed to read pem_config.json").as_slice()).unwrap();
+    let key_store: KS = Arc::new(Mutex::new(KeyStore::new()));
 
     let ws_server_addr = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8001".to_string());
     let voting_app_addr = env::args().nth(2).unwrap_or_else(|| "ws://127.0.0.1:8002".to_string());
@@ -52,7 +56,7 @@ async fn main() -> Result<(), Error> {
     println!("Listening on: {}", ws_server_addr);
 
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream, stdin_tx.clone(), pem_config.clone()));
+        tokio::spawn(accept_connection(stream, stdin_tx.clone(), pem_config.clone(), key_store.clone()));
     }
 
     Ok(())
@@ -69,7 +73,7 @@ async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channe
     }
 }
 
-async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>, pem_config: PemConfig) {
+async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>, pem_config: PemConfig, key_store: KS) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     println!("Peer address: {}", addr);
 
@@ -95,21 +99,30 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                             let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
                             continue;
                         }
+                        let el_gamal_components = certificate_data.data.el_gamal_components.clone();
                         println!("Certificate is valid. Decrypting.");
                         let pem_sk = pem_config.pem_rsa_sk.clone();
                         let subj_data = decipher_subj_data(certificate_data, pem_sk);
 
                         println!("{:?}", subj_data);
-                    },
-                    MessageType::ElGamalData(components, pk) => {
-                        //temporary for debugging purposes
 
-                        // let (keys_data, alphas_data) = create_el_gamal_keys(components, generator.lock().unwrap().key_pair.y.clone());
+                        let (mut keys_data, alphas_data) = create_el_gamal_keys(el_gamal_components, subj_data.el_gamal_public_key, subj_data.share_count);
                         // let msg = MessageType::KeysData(keys_data);
                         // tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
-                        // let msg = MessageType::KeysData(alphas_data);
-                        // let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
+                        key_store.lock().unwrap().voters_pk.append(&mut keys_data.el_gamal_pks_or_alphas);
+                        let msg = MessageType::KeysData(alphas_data);
+                        let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
+
                     },
+                    // MessageType::ElGamalData(components, pk) => {
+                    //     //temporary for debugging purposes
+                    //
+                    //     // let (keys_data, alphas_data) = create_el_gamal_keys(components, generator.lock().unwrap().key_pair.y.clone());
+                    //     // let msg = MessageType::KeysData(keys_data);
+                    //     // tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
+                    //     // let msg = MessageType::KeysData(alphas_data);
+                    //     // let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
+                    // },
                     _ => println!("Something else")
                 }
             }
@@ -159,9 +172,9 @@ fn decipher_subj_data(certificate_data: CertificateData, pem_sk: RsaPrivateKey) 
 }
 
 // Create alphas and chameleon keys
-fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint) -> (KeysData, KeysData) {
+fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint, key_count: usize) -> (KeysData, KeysData) {
     let mut el_gamal_verifier = ElGamalVerifier::from(components);
-    let (el_gamal_pks, alphas) = el_gamal_verifier.generate_multiple_chameleon_pks(y, 10);
+    let (el_gamal_pks, alphas) = el_gamal_verifier.generate_multiple_chameleon_pks(y, key_count);
     (KeysData {
         el_gamal_pks_or_alphas: el_gamal_pks,
     }, KeysData {

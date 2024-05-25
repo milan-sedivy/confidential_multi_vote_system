@@ -167,15 +167,22 @@ pub fn hash(message: String) -> BigUint {
 }
 impl Signature for ElGamalSigner {
     fn sign(&mut self, message: String) -> (BigUint,BigUint) {
+        self.sign_with_key(&self.key_pair.x.clone(), message)
+    }
+
+    fn sign_with_key(&mut self, private_key: &BigUint, message: String) -> (BigUint, BigUint) {
         let k: BigUint = self.components.generate_random(&mut self.rng);
         let r = self.components.g.clone().modpow(&k, &self.components.p);
 
 
         let hash_dec = hash(message);
         let modulo = &self.components.p - BigUint::one();
-        (r.clone(), (hash_dec.modsub(&(self.key_pair.x.clone()*r % &modulo),&modulo) * k.modinv(&self.components.q).unwrap()) % &modulo)
+        (r.clone(), (hash_dec.modsub(&(private_key*r % &modulo),&modulo) * k.modinv(&self.components.q).unwrap()) % &modulo)
     }
-
+    fn sign_using_alpha(&mut self, alpha: &BigUint, message: String) -> (BigUint, BigUint) {
+        let chameleon = &self.key_pair.x + alpha;
+        self.sign_with_key(&chameleon, message)
+    }
 }
 impl Verify for ElGamalVerifier {
     fn verify(&mut self, message: String, y: &BigUint,  signature: (BigUint, BigUint)) -> bool {
@@ -204,6 +211,8 @@ pub trait Encryption {
 
 pub trait Signature {
     fn sign(&mut self, message: String) -> (BigUint, BigUint);
+    fn sign_with_key(&mut self, private_key: &BigUint, message: String) -> (BigUint, BigUint);
+    fn sign_using_alpha(&mut self, alpha: &BigUint, message: String) -> (BigUint, BigUint);
 
 }
 pub trait Verify {
