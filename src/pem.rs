@@ -3,8 +3,10 @@ use std::io::Error;
 use std::sync::{Arc, Mutex};
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
-use env_logger::{Builder, Target};
+use env_logger::{Builder, builder, Target};
 use futures_util::{SinkExt, StreamExt, TryStreamExt};
+use log::{debug, error, info, warn};
+use log::LevelFilter::Info;
 use num_bigint::BigUint;
 use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::pss::{Signature,VerifyingKey};
@@ -17,7 +19,8 @@ use tokio_tungstenite::tungstenite::Message;
 use url::Url;
 use crate::configs::certificate::{CertificateData, MockCertificate, SubjData};
 use crate::configs::pem::PemConfig;
-use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalGenerator, ElGamalVerifier};
+use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
+use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalGenerator, ElGamalVerifier, KeyPair, Encryption, EncryptedMessage};
 mod data;
 mod configs;
 mod crypto_schemes;
@@ -33,10 +36,12 @@ impl KeyStore {
 type KS = Arc<Mutex<KeyStore>>;
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    // let mut builder = Builder::from_default_env();
-    // builder.target(Target::Stdout);
-    //
-    // builder.init();
+    let mut builder = Builder::new();
+    builder.filter(None,Info);
+    builder.target(Target::Stdout);
+
+    builder.init();
+
 
     // Configure the application from pem_config.json
     let pem_config: PemConfig = serde_json::from_slice(fs::read("pem_config.json").expect("Failed to read pem_config.json").as_slice()).unwrap();
@@ -53,7 +58,7 @@ async fn main() -> Result<(), Error> {
     tokio::spawn(communicate_with_voting_app(voting_app_url, stdin_rx));
     let try_socket = TcpListener::bind(&ws_server_addr).await;
     let listener = try_socket.expect("Failed to bind");
-    println!("Listening on: {}", ws_server_addr);
+    info!("Listening on: {}", ws_server_addr);
 
     while let Ok((stream, _)) = listener.accept().await {
         tokio::spawn(accept_connection(stream, stdin_tx.clone(), pem_config.clone(), key_store.clone()));
@@ -68,20 +73,20 @@ async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channe
 
     while let Some(message) = rx.next().await {
         // rx.map(Ok).forward(voting_app_write).await?;
-        println!("msg to be sent: {}", message);
+        info!("msg to be sent: {}", message);
         voting_app_write.send(message).await;
     }
 }
 
 async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>, pem_config: PemConfig, key_store: KS) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
-    println!("Peer address: {}", addr);
+    info!("Peer address: {}", addr);
 
     let mut ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("Error during the websocket handshake occurred");
 
-    println!("New WebSocket connection: {}", addr);
+    info!("New WebSocket connection: {}", addr);
     let msg = Message::from("Hello world");
     let (mut write, mut read) = ws_stream.split();
 
@@ -94,25 +99,29 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                     MessageType::Certificate(certificate) => {
                         let certificate_data = certificate.certificate_data.clone();
                         if !certificate_is_valid(certificate) {
-                            println!("Invalid certificate. Denying request.");
+                            warn!("Invalid certificate. Denying request.");
                             let msg = MessageType::GenericMessage(String::from("Request denied"));
                             let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
                             continue;
                         }
                         let el_gamal_components = certificate_data.data.el_gamal_components.clone();
-                        println!("Certificate is valid. Decrypting.");
+                        info!("Certificate is valid. Decrypting.");
                         let pem_sk = pem_config.pem_rsa_sk.clone();
                         let subj_data = decipher_subj_data(certificate_data, pem_sk);
 
-                        println!("{:?}", subj_data);
+                        debug!("{:?}", subj_data);
 
-                        let (mut keys_data, alphas_data) = create_el_gamal_keys(el_gamal_components, subj_data.el_gamal_public_key, subj_data.share_count);
+                        let mut el_gamal_cipher: ElGamalCipher = ElGamalCipher::from(el_gamal_components.clone(), KeyPair {x: BigUint::zero(), y: subj_data.el_gamal_public_key.clone()});
+                        let (mut keys_data, alphas_data) = create_el_gamal_keys(el_gamal_components, subj_data.el_gamal_public_key.clone(), subj_data.share_count);
+
                         // let msg = MessageType::KeysData(keys_data);
                         // tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
-                        key_store.lock().unwrap().voters_pk.append(&mut keys_data.el_gamal_pks_or_alphas);
-                        let msg = MessageType::KeysData(alphas_data);
+                        key_store.lock().unwrap().voters_pk.append(&mut keys_data.el_gamal_pks);
+                        info!("Encrypting alphas using users ElGamal PK: {:?}", BetterFormattingVec(&alphas_data));
+                        let encrypted_alphas: Vec<EncryptedMessage> = alphas_data.into_iter().map(|alpha| el_gamal_cipher.encrypt(alpha).unwrap_or_else(|e| {error!("Failed to encrypt alphas."); panic!("{:?}", e)})).collect();
+                        info!("Encryption done, sending the following: {:?}", encrypted_alphas);
+                        let msg = MessageType::EncryptedAlphas(EncryptedAlphas {encrypted_alphas});
                         let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
-
                     },
                     // MessageType::ElGamalData(components, pk) => {
                     //     //temporary for debugging purposes
@@ -123,11 +132,11 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                     //     // let msg = MessageType::KeysData(alphas_data);
                     //     // let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
                     // },
-                    _ => println!("Something else")
+                    _ => debug!("Something else")
                 }
             }
             Err(e) => {
-                println!("Error receiving message: {}", e);
+                error!("Error receiving message: {}", e);
                 break;
             }
         }
@@ -172,14 +181,12 @@ fn decipher_subj_data(certificate_data: CertificateData, pem_sk: RsaPrivateKey) 
 }
 
 // Create alphas and chameleon keys
-fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint, key_count: usize) -> (KeysData, KeysData) {
+fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint, key_count: usize) -> (KeysData, Vec<BigUint>) {
     let mut el_gamal_verifier = ElGamalVerifier::from(components);
     let (el_gamal_pks, alphas) = el_gamal_verifier.generate_multiple_chameleon_pks(y, key_count);
     (KeysData {
-        el_gamal_pks_or_alphas: el_gamal_pks,
-    }, KeysData {
-        el_gamal_pks_or_alphas: alphas
-    })
+        el_gamal_pks,
+    }, alphas)
 }
 
 // Encrypt Alphas

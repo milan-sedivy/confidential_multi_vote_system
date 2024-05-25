@@ -23,6 +23,7 @@ pub struct ElGamalGenerator {
     pub key_pair: KeyPair,
     rng: ThreadRng,
 }
+unsafe impl Send for ElGamalCipher {}
 pub struct ElGamalCipher {
     pub components: ElGamalComponents,
     key_pair: KeyPair,
@@ -107,6 +108,7 @@ impl ElGamalSigner {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EncryptedMessage(BigUint, BigUint);
 impl ElGamalCipher {
     pub fn from(components: ElGamalComponents, key_pair: KeyPair) -> Self {
@@ -150,7 +152,7 @@ impl Encryption for ElGamalCipher {
         let s = self.key_pair.y.modpow(&h,&self.components.p);
         let c1: BigUint = self.components.g.modpow(&h, &self.components.p);
         let c2: BigUint = (message * s) % &self.components.p;
-        println!("Encryption done");
+
         Ok(EncryptedMessage(c1, c2))
     }
     fn decrypt(&mut self, encrypted_message: EncryptedMessage) -> Result<BigUint,CryptoError> {

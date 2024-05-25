@@ -53,7 +53,7 @@ impl SharedVotes {
     }
 
     pub fn add_keys(&mut self, keys_data: &mut KeysData) {
-        keys_data.el_gamal_pks_or_alphas.iter().for_each(|key|{
+        keys_data.el_gamal_pks.iter().for_each(|key|{
             self.add_key(key);
         });
     }

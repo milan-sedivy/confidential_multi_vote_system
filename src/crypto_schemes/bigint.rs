@@ -1,6 +1,5 @@
-use std::{cmp, mem};
+use std::{cmp, fmt, mem};
 use num_bigint::{BigInt, BigUint};
-
 pub trait UsefulConstants {
     type Output;
     fn one() -> Self::Output;
@@ -91,4 +90,14 @@ impl ModSub for BigUint {
     }
 
 }
-
+// Used just for better log messages
+pub struct BetterFormattingVec<'a>(pub &'a Vec<BigUint>);
+impl fmt::Debug for BetterFormattingVec<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Values: {{")?;
+        for bu in self.0 {
+            writeln!(f, "  {:?}", bu)?;
+        }
+        write!(f, "}}")
+    }
+}

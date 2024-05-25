@@ -2,12 +2,12 @@
 use std::fs;
 use num_bigint::{BigUint};
 use rand::thread_rng;
-use crate::crypto_schemes::el_gamal::{ElGamalComponents, ElGamalSigner};
+use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalSigner, Encryption};
 use crate::crypto_schemes::paillier::{PaillierCipher,};
 
 use crate::configs::client::ClientConfig;
 use crate::data::{MessageType,KeysData};
-use crate::crypto_schemes::bigint::UsefulConstants;
+use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
 use std::env;
 use env_logger::{Builder, Target};
 use futures_util::{future, pin_mut, SinkExt, StreamExt};
@@ -33,8 +33,8 @@ async fn main() {
     let client_config: ClientConfig = serde_json::from_slice(fs::read("client_config.json").unwrap_or_else(|e| { error!("Failed to open client_config.json"); panic!("{}", e) } ).as_slice()).unwrap();
     // To encrypt we don't need a share or delta
     let paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
-    let elgamal_signer = ElGamalSigner::from(client_config.el_gamal_components, client_config.el_gamal_kp.clone());
-
+    let elgamal_signer = ElGamalSigner::from(client_config.el_gamal_components.clone(), client_config.el_gamal_kp.clone());
+    let mut elgamal_cipher: ElGamalCipher = ElGamalCipher::from(client_config.el_gamal_components, client_config.el_gamal_kp.clone());
     let url = url::Url::parse("ws://127.0.0.1:8001").unwrap();
 
     let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
@@ -58,8 +58,13 @@ async fn main() {
         .unwrap_or_else(|e| {error!("Message was malformed"); panic!("{}", e) }))
         .unwrap_or_else(|e| {error!("Failed to deserialize object"); panic!("{}", e) });
     match data {
-        MessageType::KeysData(keys_data) => {
-            info!("Received alphas from PEM server: {:?}", keys_data.el_gamal_pks_or_alphas);
+        MessageType::EncryptedAlphas(keys_data) => {
+            info!("Received encrypted alphas from PEM server: {:?}", keys_data);
+            let alphas: Vec<BigUint> = keys_data.encrypted_alphas.into_iter().map(
+                |e| elgamal_cipher.decrypt(e).unwrap_or_else(|e| {error!("Failed to decrypt encrypted alphas."); panic!("{:?}", e)})
+            ).collect();
+            info!("Decrypted and obtained original alphas: {:?}", BetterFormattingVec(&alphas));
+            let test = alphas;
         },
         _ => {warn!("Received unexpected MessageType, program might fail.")}
     }
