@@ -31,6 +31,7 @@ pub struct PaillierGenerator {
     number_of_shares: u8,
     pub delta: u128
 }
+unsafe impl Send for PaillierCipher {}
 #[derive(Debug)]
 pub struct PaillierCipher {
     rng: ThreadRng,

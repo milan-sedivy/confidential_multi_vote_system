@@ -2,11 +2,11 @@
 use std::fs;
 use num_bigint::{BigUint};
 use rand::thread_rng;
-use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalSigner, Encryption};
-use crate::crypto_schemes::paillier::{PaillierCipher,};
+use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalSigner, Encryption, Signature};
+use crate::crypto_schemes::paillier::{Cipher, PaillierCipher};
 
 use crate::configs::client::ClientConfig;
-use crate::data::{MessageType,KeysData};
+use crate::data::{MessageType, KeysData, VoteData};
 use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
 use std::env;
 use std::future::Future;
@@ -24,9 +24,11 @@ mod utils;
 mod data;
 mod configs;
 type ElGamalKeyPair = crate::crypto_schemes::el_gamal::KeyPair;
+
+const M: u64 = 100;
 #[tokio::main]
 async fn main() {
-    let mut builder = Builder::new();//from_default_env();
+    let mut builder = Builder::new();
     builder.filter(None,Info);
     builder.target(Target::Stdout);
 
@@ -35,7 +37,7 @@ async fn main() {
     let mut rng = thread_rng();
     let client_config: ClientConfig = serde_json::from_slice(fs::read("client_config.json").unwrap_or_else(|e| { error!("Failed to open client_config.json"); panic!("{}", e) } ).as_slice()).unwrap();
     // To encrypt we don't need a share or delta
-    let paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
+    let mut paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
     let elgamal_signer = ElGamalSigner::from(client_config.el_gamal_components.clone(), client_config.el_gamal_kp.clone());
     let mut elgamal_cipher: ElGamalCipher = ElGamalCipher::from(client_config.el_gamal_components, client_config.el_gamal_kp.clone());
     let url = url::Url::parse("ws://127.0.0.1:8001").unwrap();
@@ -70,10 +72,14 @@ async fn main() {
             info!("Client application is fully setup, you can proceed with voting.");
             let divider = "-".repeat(50);
             println!("{}", divider);
-            tokio::spawn(read_stdin(stdin_tx));
+            tokio::spawn(read_stdin(stdin_tx,paillier_cipher,elgamal_signer, alphas));
+            let _= write.close().await;
         },
         _ => {warn!("Received unexpected MessageType, program might fail.")}
     }
+    let url = url::Url::parse("ws://127.0.0.1:8002").unwrap();
+    let (ws_stream, _) = connect_async(url).await.unwrap_or_else(|e| { error!("Failed to connect"); panic!("{}", e) });
+    let (mut write, mut read) = ws_stream.split();
 
     let stdin_to_ws = stdin_rx.map(Ok).forward(write);
     let ws_to_stdout = {
@@ -88,7 +94,7 @@ async fn main() {
 
 }
 
-async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
+async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut paillier_cipher: PaillierCipher, mut el_gamal_signer: ElGamalSigner, alphas: Vec<BigUint>) {
     let mut stdin = tokio::io::stdin();
     // Create the candidate pool locally, because we are only demonstrating the principles,
     // normally this would be received from the voting server.
@@ -118,20 +124,19 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
             }
 
     }
-    println!("VoteCount: {:?}", candidate_pool.get_candidate(&1).unwrap().vote_count);
-    println!("BaseThree: {}", candidate_pool.get_base_three_votes().get());
-    let test = BaseTen::from(candidate_pool.get_base_three_votes());
 
-    println!("TotalVoteCount (base ten): {:?}", test);
+    let votes_base_ten = BaseTen::from(candidate_pool.get_base_three_votes()).0;
+    // not safe
+    let vote = BigUint::from(M).pow(votes_base_ten as u32);
 
-    loop {
-        let mut buf = vec![0; 1024];
-        let n = match stdin.read(&mut buf).await {
-            Err(_) | Ok(0) => break,
-            Ok(n) => n,
-        };
-        buf.truncate(n);
-        tx.unbounded_send(Message::from(serde_json::to_string(&GenericMessage(String::from("This is some user input"))).unwrap())).unwrap();
-        //tx.unbounded_send(Message::binary(buf)).unwrap();
-    }
+    let vote_message: Vec<VoteData> = alphas.into_iter().map(|alpha| {
+        let encrypted_vote = paillier_cipher.encrypt(vote.clone());
+        let el_gamal_signature = el_gamal_signer.sign_using_alpha(&alpha, encrypted_vote.to_string());
+        VoteData {
+            encrypted_vote,
+            el_gamal_signature
+        }
+    }).collect();
+
+    tx.unbounded_send(Message::from(serde_json::to_string(&vote_message).unwrap())).unwrap();
 }

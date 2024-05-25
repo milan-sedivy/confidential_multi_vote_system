@@ -4,7 +4,7 @@ pub struct BaseThree {
     value: u64
 }
 #[derive(Debug)]
-pub struct BaseTen(u64);
+pub struct BaseTen(pub u64);
 
 impl BaseThree {
     pub fn from_base_three(num: u64) -> Option<BaseThree> {

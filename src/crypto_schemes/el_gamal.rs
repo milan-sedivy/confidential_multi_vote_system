@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use super::error::CryptoError::{self, MessageOutOfBounds};
 use super::bigint::*;
 use sha256::digest;
+unsafe impl Send for ElGamalSigner {}
 
 pub struct ElGamalSigner {
     components: ElGamalComponents,
@@ -175,7 +176,6 @@ impl Signature for ElGamalSigner {
     fn sign_with_key(&mut self, private_key: &BigUint, message: String) -> (BigUint, BigUint) {
         let k: BigUint = self.components.generate_random(&mut self.rng);
         let r = self.components.g.clone().modpow(&k, &self.components.p);
-
 
         let hash_dec = hash(message);
         let modulo = &self.components.p - BigUint::one();
