@@ -9,12 +9,15 @@ use crate::configs::client::ClientConfig;
 use crate::data::{MessageType,KeysData};
 use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
 use std::env;
+use std::future::Future;
 use env_logger::{Builder, Target};
 use futures_util::{future, pin_mut, SinkExt, StreamExt};
 use log::{error, info, LevelFilter, warn};
 use log::LevelFilter::Info;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use crate::data::MessageType::GenericMessage;
+use crate::utils::base_three::{BaseTen, BaseThree};
 
 mod crypto_schemes;
 mod utils;
@@ -38,7 +41,7 @@ async fn main() {
     let url = url::Url::parse("ws://127.0.0.1:8001").unwrap();
 
     let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
-    tokio::spawn(read_stdin(stdin_tx));
+
 
     let (ws_stream, _) = connect_async(url).await.unwrap_or_else(|e| { error!("Failed to connect"); panic!("{}", e) });
     info!("WebSocket handshake has been successfully completed");
@@ -64,7 +67,10 @@ async fn main() {
                 |e| elgamal_cipher.decrypt(e).unwrap_or_else(|e| {error!("Failed to decrypt encrypted alphas."); panic!("{:?}", e)})
             ).collect();
             info!("Decrypted and obtained original alphas: {:?}", BetterFormattingVec(&alphas));
-            let test = alphas;
+            info!("Client application is fully setup, you can proceed with voting.");
+            let divider = "-".repeat(50);
+            println!("{}", divider);
+            tokio::spawn(read_stdin(stdin_tx));
         },
         _ => {warn!("Received unexpected MessageType, program might fail.")}
     }
@@ -80,20 +86,44 @@ async fn main() {
     pin_mut!(stdin_to_ws, ws_to_stdout);
     future::select(stdin_to_ws, ws_to_stdout).await;
 
-    // connect("ws://127.0.0.1:8001", |out| {
-    //     //data_vec.iter().for_each(|e| out.send(serde_json::to_string(e).unwrap()).unwrap());
-    //     let cert = serde_json::from_slice(fs::read("certificate.json").unwrap().as_slice()).unwrap();
-    //     let msg = MessageType::Certificate(cert);
-    //     out.send(serde_json::to_string(&msg).unwrap()).unwrap();
-    //     move |msg| {
-    //         println!("Got message: {}", msg);
-    //         out.close(CloseCode::Normal)
-    //     }
-    // }).unwrap();
 }
 
 async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
     let mut stdin = tokio::io::stdin();
+    // Create the candidate pool locally, because we are only demonstrating the principles,
+    // normally this would be received from the voting server.
+    let mut candidate_pool = utils::candidate::CandidatePool::new();
+    candidate_pool.add_candidate("Do you approve the re-election of the following candidate: Marie Novotna to the board of directors?");
+    candidate_pool.add_candidate("Do you approve the proposed executive compensation packages for the CEO Jan Cerny - 300k CZK salary plus 1mil CZK in stock options?");
+    candidate_pool.add_candidate("Do you approve the proposed dividend payment of 230CZK per share to shareholders for the fiscal year 2023?");
+    candidate_pool.add_candidate("Do you approve the proposed merger with StestiAuto a.s., involving a stock exchange of 1.5 shares of our company for each share of StestiAuto a.s.?");
+
+    for i in 0..4 {
+        let prompt = candidate_pool.get_candidate(&i).unwrap().statement.clone();
+        println!("{}", prompt);
+
+        let mut buf = vec![0; 1024];
+        let n = match stdin.read(&mut buf).await {
+            Err(_) => {error!("Reading stdin failed."); panic!();},
+            Ok(n) => n,
+        };
+        buf.truncate(n);
+        let mut cmd = String::from_utf8(buf).unwrap();
+        cmd.pop();
+            match cmd.as_str() {
+                "N" => { candidate_pool.get_candidate(&i).unwrap().vote_no(); },
+                "Y" => { candidate_pool.get_candidate(&i).unwrap().vote_yes(); },
+                "0" => { candidate_pool.get_candidate(&i).unwrap().vote_none(); },
+                _ => (),
+            }
+
+    }
+    println!("VoteCount: {:?}", candidate_pool.get_candidate(&1).unwrap().vote_count);
+    println!("BaseThree: {}", candidate_pool.get_base_three_votes().get());
+    let test = BaseTen::from(candidate_pool.get_base_three_votes());
+
+    println!("TotalVoteCount (base ten): {:?}", test);
+
     loop {
         let mut buf = vec![0; 1024];
         let n = match stdin.read(&mut buf).await {
@@ -101,6 +131,7 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>) {
             Ok(n) => n,
         };
         buf.truncate(n);
-        tx.unbounded_send(Message::binary(buf)).unwrap();
+        tx.unbounded_send(Message::from(serde_json::to_string(&GenericMessage(String::from("This is some user input"))).unwrap())).unwrap();
+        //tx.unbounded_send(Message::binary(buf)).unwrap();
     }
 }

@@ -3,6 +3,7 @@
 pub struct BaseThree {
     value: u64
 }
+#[derive(Debug)]
 pub struct BaseTen(u64);
 
 impl BaseThree {
@@ -52,17 +53,16 @@ impl From<BaseThree> for BaseTen {
         let mut base: u64 = 1;
         let mut result = 0;
         let mut number = num.value;
-        while number / base > 0 {
+
+        // Iterate over each digit of the base three number
+        while number > 0 {
+            let digit = number % 10;
+            result += digit * base;
             base *= 3;
+            number /= 10;
         }
-        base /= 3;
-        while number > 0  {
-            result *= 10;
-            let div = number / base;
-            result += div;
-            number %= base;
-            base /= 3;
-        }
+
         BaseTen(result)
     }
+
 }

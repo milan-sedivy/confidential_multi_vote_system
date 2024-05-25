@@ -119,20 +119,12 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                         key_store.lock().unwrap().voters_pk.append(&mut keys_data.el_gamal_pks);
                         info!("Encrypting alphas using users ElGamal PK: {:?}", BetterFormattingVec(&alphas_data));
                         let encrypted_alphas: Vec<EncryptedMessage> = alphas_data.into_iter().map(|alpha| el_gamal_cipher.encrypt(alpha).unwrap_or_else(|e| {error!("Failed to encrypt alphas."); panic!("{:?}", e)})).collect();
-                        info!("Encryption done, sending the following: {:?}", encrypted_alphas);
                         let msg = MessageType::EncryptedAlphas(EncryptedAlphas {encrypted_alphas});
+                        info!("Encryption done, sending the following: {:?}", msg);
+
                         let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
                     },
-                    // MessageType::ElGamalData(components, pk) => {
-                    //     //temporary for debugging purposes
-                    //
-                    //     // let (keys_data, alphas_data) = create_el_gamal_keys(components, generator.lock().unwrap().key_pair.y.clone());
-                    //     // let msg = MessageType::KeysData(keys_data);
-                    //     // tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
-                    //     // let msg = MessageType::KeysData(alphas_data);
-                    //     // let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
-                    // },
-                    _ => debug!("Something else")
+                    _other => info!("MessageType: {:?} received.", _other)
                 }
             }
             Err(e) => {

@@ -8,6 +8,26 @@ pub struct VoteCount {
     pub no: u64,
     pub none: u64,
 }
+#[derive(Copy, Clone)]
+pub enum VoteType {
+    NO = 2,
+    YES = 1,
+    NONE = 0,
+}
+impl VoteType {
+    pub fn to_u64(&self) -> u64 {
+        *self as u64
+    }
+}
+impl VoteCount {
+    // will only be used for initial vote construction
+    pub fn get_vote(&self) -> VoteType {
+        if self.no > 0 {return VoteType::NO;} else if self.yes > 0 {return VoteType::YES;} else if self.none > 0 {return VoteType::NONE;} else
+        {
+            panic!("No vote casted");
+        }
+    }
+}
 pub struct Candidate {
     pub statement: String,
     pub vote_count: VoteCount,
@@ -32,8 +52,8 @@ impl CandidatePool {
         self.last_candidate_num += 1;
     }
     // for now we keep but later on it will be read only
-    pub fn get_candidate<'a>(&'a self, key: u8) -> Option<&'a Candidate> {
-        self.pool.get(&key)
+    pub fn get_candidate(&mut self, key: &u8) -> Option<&mut Candidate> {
+        self.pool.get_mut(key)
     }
     /*    pub fn base_ten_to_three(number: u64) -> u64 {
             let mut base: u64 = 1;
@@ -71,6 +91,15 @@ impl CandidatePool {
             current_candidate += 1;
             candidate_votes /= 10;
         }
+    }
+    pub fn get_base_three_votes(&mut self) -> BaseThree {
+        let mut vote = 0u64;
+        for i in (0..(self.pool.len() as u8)).rev() {
+            let vote_count = &self.get_candidate(&i).unwrap().vote_count;
+            let casted = vote_count.get_vote();
+            vote = vote * 10 + casted.to_u64();
+        }
+        return BaseThree::from_base_three(vote).unwrap();
     }
     fn cast_base_three_vote(&mut self, candidate_num: &u8, vote: &u8) {
         if let Some(candidate) = self.pool.get_mut(candidate_num) {
