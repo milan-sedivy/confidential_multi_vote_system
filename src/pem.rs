@@ -87,7 +87,6 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
         .expect("Error during the websocket handshake occurred");
 
     info!("New WebSocket connection: {}", addr);
-    let msg = Message::from("Hello world");
     let (mut write, mut read) = ws_stream.split();
 
     while let Some(result) = read.next().await {
@@ -133,13 +132,7 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
             }
         }
     }
-
-    tx.unbounded_send(msg);
-
 }
-
-
-// Steps the TPM/PEM will do:
 
 
 // Verify signature on ceritficate
@@ -179,9 +172,4 @@ fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint, key_count: us
     (KeysData {
         el_gamal_pks,
     }, alphas)
-}
-
-// Encrypt Alphas
-fn encrypt_alphas() {
-    todo!()
 }
