@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use num_prime::RandPrime;
 use num_bigint::{BigUint, RandBigInt};
 use rand::rngs::ThreadRng;
@@ -122,6 +121,9 @@ impl ElGamalCipher {
             rng: thread_rng()
         }
     }
+    pub fn generate_nonce(&mut self) -> BigUint {
+        self.rng.gen_biguint_range(&BigUint::one(), &self.components.q)
+    }
 }
 #[allow(dead_code)]
 impl ElGamalVerifier {
@@ -135,15 +137,18 @@ impl ElGamalVerifier {
         self.components.generate_random(&mut self.rng)
     }
     pub fn generate_multiple_chameleon_pks(&mut self, y: BigUint, count: usize) -> (Vec<BigUint>, Vec<BigUint>) {
-        let mut result = HashSet::<BigUint>::new();
-        let mut alphas: HashSet<BigUint> = HashSet::<BigUint>::new();
+        let mut result = Vec::<BigUint>::new();
+        let mut alphas = Vec::<BigUint>::new();
         while result.iter().count() < count {
             let alpha = self.generate_alpha();
-            alphas.insert(alpha.clone());
-            result.insert(self.create_chameleon_pk(y.clone(), alpha));
+            // If order wouldn't be important we would just use a hashset here.
+            if alphas.iter().find(|e| **e == alpha).is_some() {
+                continue;
+            }
+            alphas.push(alpha.clone());
+            result.push(self.create_chameleon_pk(y.clone(), alpha));
         }
-
-        (result.into_iter().collect(), alphas.into_iter().collect())
+        (result, alphas)
     }
     pub fn create_chameleon_pk(&mut self, y: BigUint, alpha: BigUint) -> BigUint {
         (self.components.g.modpow(&alpha, &self.components.p) * y) % &self.components.p

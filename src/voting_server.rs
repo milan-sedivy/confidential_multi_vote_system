@@ -5,7 +5,8 @@ mod configs;
 use crate::data::{KeysData, MessageType};
 use crate::crypto_schemes::el_gamal::*;
 use crate::crypto_schemes::bigint::*;
-use std::{collections::HashSet, env, fs};
+use std::{env, fs};
+use std::collections::HashMap;
 use std::io::Error;
 use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
@@ -23,7 +24,7 @@ type Tx = UnboundedSender<Message>;
 #[derive(Clone)]
 pub struct SharedVotes {
     el_gamal_verifier: Option<ElGamalVerifier>,
-    accepted_keys: HashSet<BigUint>,
+    accepted_keys_with_nonce: HashMap<BigUint,BigUint>,
     encrypted_tally: BigUint,
 }
 /*
@@ -37,11 +38,11 @@ unsafe impl Send for SharedVotes {}
 impl SharedVotes {
     pub fn new() -> Self {
         let el_gamal_verifier = None;
-        let accepted_keys = HashSet::<BigUint>::new();
+        let accepted_keys_with_nonce = HashMap::<BigUint, BigUint>::new();
         let encrypted_tally = BigUint::zero();
         Self {
             el_gamal_verifier,
-            accepted_keys,
+            accepted_keys_with_nonce,
             encrypted_tally
         }
     }
@@ -49,25 +50,25 @@ impl SharedVotes {
     pub fn init_verifier(&mut self, components: ElGamalComponents) {
         self.el_gamal_verifier = Some(ElGamalVerifier::from(components));
     }
-    pub fn add_key(&mut self, chameleon_key: &BigUint) {
-        self.accepted_keys.insert(chameleon_key.clone());
+    pub fn add_key(&mut self, chameleon_key: &BigUint, nonce: &BigUint) {
+        self.accepted_keys_with_nonce.insert(chameleon_key.clone(), nonce.clone());
     }
 
     pub fn add_keys(&mut self, keys_data: &mut KeysData) {
-        keys_data.el_gamal_pks.iter().for_each(|key|{
-            self.add_key(key);
+        keys_data.el_gamal_pks.iter().zip(keys_data.nonce_vec.iter()).for_each(|(key, nonce)|{
+            self.add_key(key, nonce);
         });
     }
     //Needs to find it based on hash and message performs an exhaustive search.
-    fn check_and_remove_key(&mut self, message: String, signature: (BigUint, BigUint),) -> bool {
+    fn check_and_remove_key(&mut self, signature: (BigUint, BigUint),) -> bool {
         let mut accepted_key: (bool, BigUint) = (false, BigUint::zero());
-        self.accepted_keys.iter().for_each(|pk| {
-            if self.el_gamal_verifier.as_mut().unwrap().verify(message.clone(), pk, signature.clone()) {
+        self.accepted_keys_with_nonce.iter().for_each(|(pk, nonce)| {
+            if self.el_gamal_verifier.as_mut().unwrap().verify(nonce.clone().to_string(), pk, signature.clone()) {
                 accepted_key = (true, pk.clone());
             }
         });
         if accepted_key.0 {
-            self.accepted_keys.remove(&accepted_key.1);
+            self.accepted_keys_with_nonce.remove(&accepted_key.1);
             return true;
         }
         return false;
@@ -119,10 +120,13 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                     MessageType::KeysData(mut e) => {
                         //println!("KeysData: {:?}", e)
                         voting_ballot.lock().unwrap().add_keys(&mut e);
-                        info!("Accepted keys: {:?}", BetterFormattingVec(&voting_ballot.lock().unwrap().accepted_keys.clone().into_iter().collect()));
+                        //info!("Accepted keys: {:?}", BetterFormattingVec(&voting_ballot.lock().unwrap().accepted_keys_with_nonce.clone().into_iter().collect()));
+                        let _ = &voting_ballot.lock().unwrap().accepted_keys_with_nonce.iter().for_each(|(pk, nonce)| {
+                           info!("Accepted Key: {:?}, with nonce: {:?}", pk, nonce);
+                        });
                     },
                     MessageType::EncryptedVote(e) => {
-                        if voting_ballot.lock().unwrap().check_and_remove_key(e.encrypted_vote.to_string(), e.el_gamal_signature.clone()) {
+                        if voting_ballot.lock().unwrap().check_and_remove_key(e.el_gamal_signature.clone()) {
                             info!("Signature was verified, encrypted vote is accepted.");
                             if voting_ballot.lock().unwrap().encrypted_tally == BigUint::zero() {
                                 voting_ballot.lock().unwrap().encrypted_tally = e.encrypted_vote;

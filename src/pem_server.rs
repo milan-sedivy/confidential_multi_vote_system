@@ -8,6 +8,8 @@ use futures_util::{SinkExt, StreamExt};
 use log::{debug, error, info, warn};
 use log::LevelFilter::Info;
 use num_bigint::BigUint;
+use rand::rngs::{StdRng};
+use rand::SeedableRng;
 use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::pss::{Signature,VerifyingKey};
 use rsa::{Oaep, RsaPrivateKey, RsaPublicKey};
@@ -73,7 +75,7 @@ async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channe
 
     while let Some(message) = rx.next().await {
         // rx.map(Ok).forward(voting_app_write).await?;
-        info!("Sending message to voting server: {}", message);
+        info!("Sending data to voting server.");
         let _ = voting_app_write.send(message).await;
     }
 }
@@ -106,19 +108,26 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                         let el_gamal_components = certificate_data.data.el_gamal_components.clone();
                         info!("Certificate is valid. Decrypting.");
                         let pem_sk = pem_config.pem_rsa_sk.clone();
-                        let subj_data = decipher_subj_data(certificate_data, pem_sk);
+                        let subj_data = decipher_subj_data(certificate_data.clone(), pem_sk);
 
                         debug!("{:?}", subj_data);
 
                         let mut el_gamal_cipher: ElGamalCipher = ElGamalCipher::from(el_gamal_components.clone(), KeyPair {x: BigUint::zero(), y: subj_data.el_gamal_public_key.clone()});
-                        let (mut keys_data, alphas_data) = create_el_gamal_keys(el_gamal_components, subj_data.el_gamal_public_key.clone(), subj_data.share_count);
-
+                        let (mut el_gamal_pks, alphas_data) = create_el_gamal_keys_and_alphas(el_gamal_components, subj_data.el_gamal_public_key.clone(), subj_data.share_count);
+                        let nonce_vec: Vec<BigUint> = (0..el_gamal_pks.len()).map(|_| el_gamal_cipher.generate_nonce()).collect();
+                        let keys_data = KeysData { el_gamal_pks: el_gamal_pks.clone(), nonce_vec: nonce_vec.clone() };
                         let msg = MessageType::KeysData(keys_data.clone());
                         tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
-                        key_store.lock().unwrap().voters_pk.append(&mut keys_data.el_gamal_pks);
+                        key_store.lock().unwrap().voters_pk.append(&mut el_gamal_pks);
                         info!("Encrypting alphas using users ElGamal PK: {:?}", BetterFormattingVec(&alphas_data));
                         let encrypted_alphas: Vec<EncryptedMessage> = alphas_data.into_iter().map(|alpha| el_gamal_cipher.encrypt(alpha).unwrap_or_else(|e| {error!("Failed to encrypt alphas."); panic!("{:?}", e)})).collect();
-                        let msg = MessageType::EncryptedAlphas(EncryptedAlphas {encrypted_alphas});
+
+                        let mut rng = StdRng::from_entropy();
+                        let encrypted_nonce_vec: Vec<Vec<u8>> = nonce_vec.iter().map(|nonce| {
+                            let padding = Oaep::new::<Sha256>();
+                            certificate_data.data.client_pk.encrypt(&mut rng, padding, &nonce.to_bytes_be()[..]).expect("failed to encrypt")
+                        }).collect();
+                        let msg = MessageType::EncryptedAlphas(EncryptedAlphas {encrypted_alphas, encrypted_nonce_vec});
                         info!("Encryption done, sending the following: {:?}", msg);
 
                         let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
@@ -166,10 +175,8 @@ fn decipher_subj_data(certificate_data: CertificateData, pem_sk: RsaPrivateKey) 
 }
 
 // Create alphas and chameleon keys
-fn create_el_gamal_keys(components: ElGamalComponents, y: BigUint, key_count: usize) -> (KeysData, Vec<BigUint>) {
+fn create_el_gamal_keys_and_alphas(components: ElGamalComponents, y: BigUint, key_count: usize) -> (Vec<BigUint>, Vec<BigUint>) {
     let mut el_gamal_verifier = ElGamalVerifier::from(components);
     let (el_gamal_pks, alphas) = el_gamal_verifier.generate_multiple_chameleon_pks(y, key_count);
-    (KeysData {
-        el_gamal_pks,
-    }, alphas)
+    (el_gamal_pks, alphas)
 }

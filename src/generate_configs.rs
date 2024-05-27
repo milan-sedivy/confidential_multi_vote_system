@@ -50,6 +50,9 @@ fn main() {
 
     let pem_rsa_sk = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate PEM private key");
     let pem_rsa_pk = RsaPublicKey::from(&pem_rsa_sk);
+    let client_sk = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate Client private key");
+    let client_pk = RsaPublicKey::from(&client_sk);
+
     let ca_rsa_private_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate CA private key");
     let ca_rsa_sk = BlindedSigningKey::<Sha256>::new(ca_rsa_private_key);
     let ca_rsa_pk = ca_rsa_sk.verifying_key();
@@ -57,6 +60,7 @@ fn main() {
     let nonce = Aes256Gcm::generate_nonce(&mut rng).as_slice().to_owned();
 
     let client_config: ClientConfig = ClientConfig {
+        client_sk,
         paillier_pk: paillier_pk.clone(),
         el_gamal_kp: el_gamal_kp.clone(),
         el_gamal_components,
@@ -127,6 +131,7 @@ fn main() {
     let certificate_data = CertificateData {
         data: Data {
             name: "Robert Aliceman".to_string(),
+            client_pk,
             el_gamal_components,
             encrypted_nonce,
             encrypted_client_sk,

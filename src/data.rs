@@ -16,10 +16,12 @@ pub struct Data {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KeysData {
     pub el_gamal_pks: Vec<BigUint>,
+    pub nonce_vec: Vec<BigUint>
 }
 #[derive(Serialize, Deserialize)]
 pub struct EncryptedAlphas {
     pub encrypted_alphas: Vec<EncryptedMessage>,
+    pub encrypted_nonce_vec: Vec<Vec<u8>>,
 }
 impl fmt::Debug for EncryptedAlphas {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -27,7 +29,9 @@ impl fmt::Debug for EncryptedAlphas {
         for message in &self.encrypted_alphas {
             writeln!(f, "  {:?}", message)?;
         }
-        write!(f, "}}")
+        writeln!(f, "")?;
+        write!(f, "}}, {{EncryptedNonce Data}}")?;
+        write!(f, "")
     }
 }
 //To be sent from the client to the voting_server

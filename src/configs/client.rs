@@ -1,9 +1,10 @@
-use rsa::{RsaPublicKey};
+use rsa::{RsaPrivateKey, RsaPublicKey};
 use serde::{Deserialize, Serialize};
 use crate::crypto_schemes::el_gamal::ElGamalComponents;
 
 #[derive(Serialize, Deserialize)]
 pub struct ClientConfig {
+    pub client_sk: RsaPrivateKey,
     pub paillier_pk: crate::crypto_schemes::paillier::PublicKey,
     pub el_gamal_kp: crate::crypto_schemes::el_gamal::KeyPair,
     pub el_gamal_components: ElGamalComponents,

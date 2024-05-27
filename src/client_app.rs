@@ -11,6 +11,8 @@ use env_logger::{Builder, Target};
 use futures_util::{future, pin_mut, SinkExt, StreamExt};
 use log::{error, info, warn};
 use log::LevelFilter::Info;
+use rsa::Oaep;
+use rsa::sha2::Sha256;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use crate::data::MessageType::{EncryptedVote};
@@ -64,10 +66,16 @@ async fn main() {
             let alphas: Vec<BigUint> = keys_data.encrypted_alphas.into_iter().map(
                 |e| elgamal_cipher.decrypt(e).unwrap_or_else(|e| {error!("Failed to decrypt encrypted alphas."); panic!("{:?}", e)})
             ).collect();
+            let nonce_vec: Vec<BigUint> = keys_data.encrypted_nonce_vec.into_iter().map(|nonce| {
+                let padding = Oaep::new::<Sha256>();
+                let dec_data = client_config.client_sk.decrypt(padding, &nonce[..]).expect("failed to decrypt");
+                BigUint::from_bytes_be(dec_data.as_slice())
+            }).collect();
             info!("Decrypted and obtained original alphas: {:?}", BetterFormattingVec(&alphas));
+            info!("Nonces: {:?}", BetterFormattingVec(&nonce_vec));
             info!("Client application is fully setup, you can proceed with voting.");
             print_divider();
-            tokio::spawn(read_stdin(stdin_tx,paillier_cipher,elgamal_signer, alphas));
+            tokio::spawn(read_stdin(stdin_tx,paillier_cipher,elgamal_signer, alphas, nonce_vec));
             let _= write.close().await;
         },
         _ => {warn!("Received unexpected MessageType, program might fail.")}
@@ -89,7 +97,7 @@ async fn main() {
 
 }
 
-async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut paillier_cipher: PaillierCipher, mut el_gamal_signer: ElGamalSigner, alphas: Vec<BigUint>) {
+async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut paillier_cipher: PaillierCipher, mut el_gamal_signer: ElGamalSigner, alphas: Vec<BigUint>, nonce_vec: Vec<BigUint>) {
     let mut stdin = tokio::io::stdin();
     // Create the candidate pool locally, because we are only demonstrating the principles,
     // normally this would be received from the voting server.
@@ -102,31 +110,45 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut pai
     for i in 0..4 {
         let prompt = candidate_pool.get_candidate(&i).unwrap().statement.clone();
         println!("{}", prompt);
+        loop {
+            let mut buf = vec![0; 1024];
+            let n = match stdin.read(&mut buf).await {
+                Err(_) => {
+                    error!("Reading stdin failed.");
+                    panic!();
+                },
+                Ok(n) => n,
+            };
+            buf.truncate(n);
+            let mut cmd = String::from_utf8(buf).unwrap();
+            cmd.pop();
 
-        let mut buf = vec![0; 1024];
-        let n = match stdin.read(&mut buf).await {
-            Err(_) => {error!("Reading stdin failed."); panic!();},
-            Ok(n) => n,
-        };
-        buf.truncate(n);
-        let mut cmd = String::from_utf8(buf).unwrap();
-        cmd.pop();
             match cmd.as_str() {
-                "N" => { candidate_pool.get_candidate(&i).unwrap().vote_no(); },
-                "Y" => { candidate_pool.get_candidate(&i).unwrap().vote_yes(); },
-                "0" => { candidate_pool.get_candidate(&i).unwrap().vote_none(); },
-                _ => (),
+                "N" | "n" => {
+                    candidate_pool.get_candidate(&i).unwrap().vote_no();
+                    break;
+                },
+                "Y" | "y" => {
+                    candidate_pool.get_candidate(&i).unwrap().vote_yes();
+                    break;
+                },
+                "A" | "a" => {
+                    candidate_pool.get_candidate(&i).unwrap().vote_none();
+                    break;
+                },
+                _ => warn!("Invalid input, valid inputs: (N/n)ot accepting, (Y/y)es, (A/a)bstain."),
             }
-
+            cmd.pop();
+        }
     }
 
     let votes_base_ten = BaseTen::from(candidate_pool.get_base_three_votes()).0;
     // not safe
     let vote = BigUint::from(M).pow(votes_base_ten as u32);
 
-    let vote_messages: Vec<MessageType> = alphas.into_iter().map(|alpha| {
+    let vote_messages: Vec<MessageType> = alphas.into_iter().zip(nonce_vec.into_iter()).map(|(alpha, nonce)| {
         let encrypted_vote = paillier_cipher.encrypt(vote.clone());
-        let el_gamal_signature = el_gamal_signer.sign_using_alpha(&alpha, encrypted_vote.to_string());
+        let el_gamal_signature = el_gamal_signer.sign_using_alpha(&alpha, nonce.to_string());
         EncryptedVote(VoteData {
             encrypted_vote,
             el_gamal_signature

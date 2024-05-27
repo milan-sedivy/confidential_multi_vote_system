@@ -34,7 +34,7 @@ path = "src/voting_server.rs"
 
 [[bin]]
 name = "pem_server"
-path = "src/pem.rs"
+path = "src/pem_server.rs"
 
 [[bin]]
 name = "generate_configs"

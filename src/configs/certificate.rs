@@ -1,4 +1,5 @@
 use num_bigint::BigUint;
+use rsa::RsaPublicKey;
 use serde::{Deserialize, Serialize};
 use crate::crypto_schemes::el_gamal::ElGamalComponents;
 #[derive(Debug, Serialize, Deserialize)]
@@ -16,6 +17,7 @@ pub struct CertificateData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Data {
     pub name: String,
+    pub client_pk: RsaPublicKey,
     pub el_gamal_components: ElGamalComponents,
     pub encrypted_nonce: Vec<u8>,
     pub encrypted_client_sk: Vec<u8>,
