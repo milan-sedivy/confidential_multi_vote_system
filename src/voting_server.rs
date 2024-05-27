@@ -147,7 +147,8 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                             paillier_cipher.decrypt_share(encrypted_tally_copy.clone())
                         }).collect();
                         paillier_combiner.add_all_shares(decrypted_shares);
-                        info!("Combined decrypted shares: {:?}",paillier_combiner.combine_shares());
+                        let combined_decryption = paillier_combiner.combine_shares();
+                        info!("Combined decrypted shares: {:?}",combined_decryption);
                     }
                     _ => {}
                 }

@@ -24,7 +24,7 @@ mod data;
 mod configs;
 type ElGamalKeyPair = crate::crypto_schemes::el_gamal::KeyPair;
 
-const M: u64 = 11;
+const M: u64 = 10;
 #[tokio::main]
 async fn main() {
     let mut builder = Builder::new();
