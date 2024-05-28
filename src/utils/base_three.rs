@@ -1,5 +1,6 @@
 //pub struct Number(u64);
 
+#[derive(Debug)]
 pub struct BaseThree {
     value: u64
 }

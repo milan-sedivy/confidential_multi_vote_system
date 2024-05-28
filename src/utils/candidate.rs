@@ -68,14 +68,29 @@ impl CandidatePool {
     }
 
     pub fn cast_encoded_votes(&mut self, encoded_vote: BaseTen) {
-        let mut candidate_votes = BaseThree::from(encoded_vote).get();//Self::base_ten_to_three(encoded_vote);
-        let mut current_candidate = 0;
-        while candidate_votes > 0 {
-            let current_vote: u8 = (candidate_votes % 10) as u8;
-            self.cast_base_three_vote(&current_candidate, &current_vote);
-            current_candidate += 1;
-            candidate_votes /= 10;
+        let base_three_votes = Self::number_to_base_three(encoded_vote.0, self.last_candidate_num + 1);
+
+        for (current_candidate, vote) in base_three_votes.char_indices() {
+            let current_vote: u8 = vote.to_digit(10).unwrap() as u8;
+            self.cast_base_three_vote(&(current_candidate as u8), &current_vote);
         }
+    }
+    fn number_to_base_three(mut num: u64, length: u8) -> String {
+        if num == 0 {
+            return "0".to_string();
+        }
+
+        let mut base_three = String::new();
+        while num > 0 {
+            base_three.push_str(&(num % 3).to_string());
+            num /= 3;
+        }
+
+        while base_three.len() < length as usize {
+            base_three.push('0');
+        }
+
+        base_three.chars().rev().collect()
     }
     pub fn cast_votes(&mut self, base_three_vote: BaseThree) {
         let mut candidate_votes = base_three_vote.get();

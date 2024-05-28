@@ -39,3 +39,7 @@ path = "src/pem_server.rs"
 [[bin]]
 name = "generate_configs"
 path = "src/generate_configs.rs"
+
+#[[bin]]
+#name = "key_share_holders"
+#path = "src/key_share_holders.rs"

@@ -141,7 +141,6 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut pai
             cmd.pop();
         }
     }
-
     let votes_base_ten = BaseTen::from(candidate_pool.get_base_three_votes()).0;
     // not safe
     let vote = BigUint::from(M).pow(votes_base_ten as u32);
