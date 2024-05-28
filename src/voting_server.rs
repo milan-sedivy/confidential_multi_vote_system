@@ -2,12 +2,14 @@
 pub mod crypto_schemes;
 mod data;
 mod configs;
+mod utils;
 use crate::data::{KeysData, MessageType};
 use crate::crypto_schemes::el_gamal::*;
 use crate::crypto_schemes::bigint::*;
 use std::{env, fs};
 use std::collections::HashMap;
-use std::io::Error;
+use std::io::{Error, Read};
+use std::ops::{Div, Rem};
 use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
 use futures_channel::mpsc::{UnboundedSender};
@@ -15,10 +17,13 @@ use futures_util::{StreamExt};
 use log::{error, info};
 use log::LevelFilter::Info;
 use num_bigint::BigUint;
+use rand::distributions::uniform::SampleBorrow;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use crate::configs::voting_server::VotingServerConfig;
 use crate::crypto_schemes::paillier::{PaillierCipher, PaillierCombiner, Cipher};
+use crate::utils::base_three::{BaseTen, BaseThree};
+use crate::utils::candidate::CandidatePool;
 
 type Tx = UnboundedSender<Message>;
 #[derive(Clone)]
@@ -147,8 +152,9 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                             paillier_cipher.decrypt_share(encrypted_tally_copy.clone())
                         }).collect();
                         paillier_combiner.add_all_shares(decrypted_shares);
-                        let combined_decryption = paillier_combiner.combine_shares();
+                        let mut combined_decryption = paillier_combiner.combine_shares();
                         info!("Combined decrypted shares: {:?}",combined_decryption);
+                        calculate_votes(&mut combined_decryption);
                     }
                     _ => {}
                 }
@@ -159,4 +165,28 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
             }
         }
     }
+}
+//this function is hardcoded for 4 candidates where each candidate has 3 possible types of votes (Y/N/A)
+fn calculate_votes(mut combined: &mut BigUint) {
+    let mut candidate_pool = CandidatePool::new();
+    candidate_pool.add_candidate("Do you approve the re-election of the following candidate: Marie Novotna to the board of directors?");
+    candidate_pool.add_candidate("Do you approve the proposed executive compensation packages for the CEO Jan Cerny - 300k CZK salary plus 1mil CZK in stock options?");
+    candidate_pool.add_candidate("Do you approve the proposed dividend payment of 230CZK per share to shareholders for the fiscal year 2023?");
+    candidate_pool.add_candidate("Do you approve the proposed merger with StestiAuto a.s., involving a stock exchange of 1.5 shares of our company for each share of StestiAuto a.s.?");
+    let mut current_exponent = 80u32; //2222 in base three
+    let mut div = BigUint::from(10u8).pow(current_exponent);
+    while current_exponent > 0 {
+        let times = (combined.clone().div(&div)).to_bytes_be().as_slice().try_into().unwrap();
+        let replace = combined.clone().rem(&div);
+        *combined = replace;
+        (0..u8::from_be_bytes(times)).for_each(|_|{  candidate_pool.cast_encoded_votes(BaseTen(current_exponent as u64)); });
+        current_exponent -= 1;
+        div = BigUint::from(10u8).pow(current_exponent);
+    }
+    println!("===================RESULTS===================");
+    println!("{:?}", candidate_pool.get_candidate(&0u8).unwrap());
+    println!("{:?}", candidate_pool.get_candidate(&1u8).unwrap());
+    println!("{:?}", candidate_pool.get_candidate(&2u8).unwrap());
+    println!("{:?}", candidate_pool.get_candidate(&3u8).unwrap());
+    println!("=============================================");
 }

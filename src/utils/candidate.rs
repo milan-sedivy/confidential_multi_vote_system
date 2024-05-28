@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use std::collections::HashMap;
+use std::fmt;
 use super::base_three::{BaseThree, BaseTen};
 
 #[derive(Debug)]
@@ -28,11 +29,21 @@ impl VoteCount {
         }
     }
 }
+
 pub struct Candidate {
     pub statement: String,
     pub vote_count: VoteCount,
 }
-
+impl fmt::Debug for Candidate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Proposal {{\n  Statement: \"{}\",\n  VoteCount: {:?}\n}}",
+            self.statement,
+            self.vote_count
+        )
+    }
+}
 pub struct CandidatePool {
     pool: HashMap<u8, Candidate>,
     last_candidate_num: u8,
@@ -55,23 +66,7 @@ impl CandidatePool {
     pub fn get_candidate(&mut self, key: &u8) -> Option<&mut Candidate> {
         self.pool.get_mut(key)
     }
-    /*    pub fn base_ten_to_three(number: u64) -> u64 {
-            let mut base: u64 = 1;
-            let mut result = 0;
-            let mut number = number;
-            while number / base > 0 {
-                base *= 3;
-            }
-            base /= 3;
-            while number > 0  {
-                result *= 10;
-                let div = number / base;
-                result += div;
-                number %= base;
-                base /= 3;
-            }
-            result
-        }*/
+
     pub fn cast_encoded_votes(&mut self, encoded_vote: BaseTen) {
         let mut candidate_votes = BaseThree::from(encoded_vote).get();//Self::base_ten_to_three(encoded_vote);
         let mut current_candidate = 0;

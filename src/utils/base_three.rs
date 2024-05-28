@@ -21,14 +21,16 @@ impl BaseThree {
 
     pub fn new(num: BaseTen) -> BaseThree {
         let mut x: u64 = num.0;
-        let mut multiplier = 1;
         let mut result = 0;
+        let mut multiplier = 1;
+
         while x > 0 {
-            let remainder = x % 10;
+            let remainder = x % 3;
             result += remainder * multiplier;
-            multiplier *= 3;
-            x /= 10;
+            multiplier *= 10;
+            x /= 3;
         }
+
         BaseThree {
             value: result
         }
