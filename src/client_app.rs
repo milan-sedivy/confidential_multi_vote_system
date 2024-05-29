@@ -161,7 +161,7 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut pai
         Err(_) => {error!("Reading stdin failed."); panic!();},
         Ok(n) => n,
     };
-    tx.unbounded_send(Message::from(serde_json::to_string(&MessageType::DecryptionRequest).unwrap())).unwrap();
+    //tx.unbounded_send(Message::from(serde_json::to_string(&MessageType::DecryptionRequest(EncryptedTally(BigUint::zero()))).unwrap())).unwrap();
 }
 
 fn print_divider() {

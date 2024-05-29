@@ -3,7 +3,7 @@ pub mod crypto_schemes;
 mod data;
 mod configs;
 mod utils;
-use crate::data::{KeysData, MessageType};
+use crate::data::{EncryptedTally, KeysData, MessageType};
 use crate::crypto_schemes::el_gamal::*;
 use crate::crypto_schemes::bigint::*;
 use std::{env, fs};
@@ -13,14 +13,14 @@ use std::ops::{Div, Rem};
 use std::sync::{Arc, Mutex};
 use env_logger::{Builder, Target};
 use futures_channel::mpsc::{UnboundedSender};
-use futures_util::{StreamExt};
+use futures_util::{SinkExt, StreamExt};
 use log::{error, info};
 use log::LevelFilter::Info;
 use num_bigint::BigUint;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
 use crate::configs::voting_server::VotingServerConfig;
-use crate::crypto_schemes::paillier::{PaillierCipher, PaillierCombiner, Cipher};
+use crate::crypto_schemes::paillier::{PaillierCombiner};
 use crate::utils::base_three::{BaseTen};
 use crate::utils::candidate::CandidatePool;
 
@@ -114,7 +114,7 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
         .expect("Error during the websocket handshake occurred");
 
     info!("New WebSocket connection: {}", addr);
-    let (_write, mut read) = ws_stream.split();
+    let (mut write, mut read) = ws_stream.split();
 
     while let Some(result) = read.next().await {
         match result {
@@ -141,16 +141,23 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                             info!("Signature was not accepted!")
                         }
                     },
-                    MessageType::DecryptionRequest => {
+                    MessageType::RequestEncryptedTally => {
+                        let request = MessageType::DecryptionRequest(EncryptedTally(voting_ballot.lock().unwrap().encrypted_tally.clone()));
+                        let message = Message::from(serde_json::to_string(&request).unwrap());
+                        info!("Sending tally to key share holders.");
+                        let _ = write.send(message).await;
+                    }
+                    MessageType::DecryptionResponse(decrypted_shares) => {
+                        info!("Received decrypted shares, combining.");
                         let mut paillier_combiner = PaillierCombiner::init_from(&voting_server_config.paillier_pk.clone(), voting_server_config.delta.clone());
 
-                        let encrypted_tally_copy = voting_ballot.lock().unwrap().encrypted_tally.clone();
-                        let shares = voting_server_config.paillier_sk_shares.clone();
-                        let decrypted_shares: Vec<BigUint> = shares.iter().map(|share| {
-                            let mut paillier_cipher = PaillierCipher::init_from(&voting_server_config.paillier_pk.clone(), share, voting_server_config.delta.clone());
-                            paillier_cipher.decrypt_share(encrypted_tally_copy.clone())
-                        }).collect();
-                        paillier_combiner.add_all_shares(decrypted_shares);
+                        // let encrypted_tally_copy = voting_ballot.lock().unwrap().encrypted_tally.clone();
+                        // let shares = voting_server_config.paillier_sk_shares.clone();
+                        // let decrypted_shares: Vec<BigUint> = shares.iter().map(|share| {
+                        //     let mut paillier_cipher = PaillierCipher::init_from(&voting_server_config.paillier_pk.clone(), share, voting_server_config.delta.clone());
+                        //     paillier_cipher.decrypt_share(encrypted_tally_copy.clone())
+                        // }).collect();
+                        paillier_combiner.add_all_shares(decrypted_shares.0);
                         let mut combined_decryption = paillier_combiner.combine_shares();
                         info!("Combined decrypted shares: {:?}",combined_decryption);
                         calculate_votes(&mut combined_decryption);

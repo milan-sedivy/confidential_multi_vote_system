@@ -90,7 +90,7 @@ impl CandidatePool {
             base_three.push('0');
         }
 
-        base_three.chars().rev().collect()
+        base_three.chars().collect()
     }
     pub fn cast_votes(&mut self, base_three_vote: BaseThree) {
         let mut candidate_votes = base_three_vote.get();

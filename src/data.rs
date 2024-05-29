@@ -41,6 +41,10 @@ pub struct VoteData {
     pub el_gamal_signature: (BigUint, BigUint)
 }
 #[derive(Debug, Serialize, Deserialize)]
+pub struct EncryptedTally(pub BigUint);
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DecryptedShares(pub Vec<BigUint>);
+#[derive(Debug, Serialize, Deserialize)]
 pub enum MessageType {
     EncryptedVote(VoteData), //Sent by client to voting_server
  //   PailierData(Data),
@@ -49,7 +53,9 @@ pub enum MessageType {
  //   ElGamalData(ElGamalComponents, BigUint),
     Certificate(MockCertificate), //Sent by client to pem server
  //   KeyRequest, //Sent by voting_server to pem_server
-    DecryptionRequest,
+    DecryptionRequest(EncryptedTally),
+    DecryptionResponse(DecryptedShares),
+    RequestEncryptedTally,
     GenericMessage(String),
     Nothing
 }
