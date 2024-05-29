@@ -1,6 +1,6 @@
 [package]
 name = "shareholder_crypto"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,7 +17,7 @@ tokio-tungstenite = "*"
 ws = "0.9.2"
 futures-channel = "0.3.30"
 futures-util = "0.3.30"
-tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros", "io-std"] }
+tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros", "io-std", "sync", "time"] }
 env_logger = "0.11.3"
 log = "0.4.21"
 url = "2.5.0"

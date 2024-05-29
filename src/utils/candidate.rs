@@ -85,7 +85,7 @@ impl CandidatePool {
     }
     fn number_to_base_three(mut num: u64, length: u8) -> String {
         if num == 0 {
-            return "0".to_string();
+            return "0".repeat(length as usize).to_string();
         }
 
         let mut base_three = String::new();

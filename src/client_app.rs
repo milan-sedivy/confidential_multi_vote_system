@@ -155,13 +155,7 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut pai
     }).collect();
     vote_messages.iter().for_each(|vote_message|{tx.unbounded_send(Message::from(serde_json::to_string(&vote_message).unwrap())).unwrap();});
     print_divider();
-
-    let mut buf = vec![0; 1024];
-    match stdin.read(&mut buf).await {
-        Err(_) => {error!("Reading stdin failed."); panic!();},
-        Ok(n) => n,
-    };
-    //tx.unbounded_send(Message::from(serde_json::to_string(&MessageType::DecryptionRequest(EncryptedTally(BigUint::zero()))).unwrap())).unwrap();
+    info!("Client is no longer needed within the protocol.");
 }
 
 fn print_divider() {

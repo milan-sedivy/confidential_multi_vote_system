@@ -19,6 +19,7 @@ use log::LevelFilter::Info;
 use num_bigint::BigUint;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
+use crate::configs::existing_votes::ExistingVotes;
 use crate::configs::voting_server::VotingServerConfig;
 use crate::crypto_schemes::paillier::{PaillierCombiner};
 use crate::utils::base_three::{BaseTen};
@@ -87,8 +88,14 @@ async fn main() -> Result<(), Error> {
 
     builder.init();
     let voting_server_config = fs::read("voting_server_config.json").unwrap_or_else(|e| { error!("Failed to read voting_server_config.json"); panic!("{}", e)});
+    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("existing_votes.json").unwrap_or_else(|e| panic!("{}", e)).as_slice()).unwrap();
+
     let voting_server_config: VotingServerConfig = serde_json::from_slice(&voting_server_config[..]).unwrap_or_else(|e| { error!("Failed to deserialize voting server config"); panic!("{}", e)});
     let voting_ballot = Arc::new(Mutex::new(SharedVotes::new()));
+
+    // This is here to fake existing votes
+    voting_ballot.lock().unwrap().encrypted_tally = existing_votes.casted_votes.iter().product();
+
     voting_ballot.lock().unwrap().init_verifier(voting_server_config.el_gamal_components.clone());
 
     let addr = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8002".to_string());
@@ -151,16 +158,14 @@ async fn accept_connection(stream: TcpStream, voting_ballot: Arc<Mutex<SharedVot
                         info!("Received decrypted shares, combining.");
                         let mut paillier_combiner = PaillierCombiner::init_from(&voting_server_config.paillier_pk.clone(), voting_server_config.delta.clone());
 
-                        // let encrypted_tally_copy = voting_ballot.lock().unwrap().encrypted_tally.clone();
-                        // let shares = voting_server_config.paillier_sk_shares.clone();
-                        // let decrypted_shares: Vec<BigUint> = shares.iter().map(|share| {
-                        //     let mut paillier_cipher = PaillierCipher::init_from(&voting_server_config.paillier_pk.clone(), share, voting_server_config.delta.clone());
-                        //     paillier_cipher.decrypt_share(encrypted_tally_copy.clone())
-                        // }).collect();
                         paillier_combiner.add_all_shares(decrypted_shares.0);
                         let mut combined_decryption = paillier_combiner.combine_shares();
                         info!("Combined decrypted shares: {:?}",combined_decryption);
                         calculate_votes(&mut combined_decryption);
+
+                        info!("Voting has successfully finished.");
+                        let _= write.close().await;
+                        std::process::exit(0);
                     }
                     _ => {}
                 }

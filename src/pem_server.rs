@@ -1,6 +1,7 @@
 use std::{env, fs};
 use std::io::Error;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use aes_gcm::{Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
 use env_logger::{Builder, Target};
@@ -9,17 +10,21 @@ use log::{debug, error, info, warn};
 use log::LevelFilter::Info;
 use num_bigint::BigUint;
 use rand::rngs::{StdRng};
-use rand::SeedableRng;
+use rand::{SeedableRng, thread_rng};
+use rand::seq::SliceRandom;
 use rsa::pkcs1::DecodeRsaPublicKey;
 use rsa::pss::{Signature,VerifyingKey};
 use rsa::{Oaep, RsaPrivateKey, RsaPublicKey};
 use rsa::sha2::Sha256;
 use rsa::signature::Verifier;
 use tokio::net::{TcpListener, TcpStream};
+use tokio::sync::Notify;
+use tokio::time::timeout;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
 use crate::configs::certificate::{CertificateData, MockCertificate, SubjData};
+use crate::configs::existing_votes::ExistingVotes;
 use crate::configs::pem::PemConfig;
 use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
 use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalVerifier, KeyPair, Encryption, EncryptedMessage};
@@ -31,6 +36,11 @@ unsafe impl Send for KeyStore {}
 #[derive(Clone)]
 pub struct KeyStore {
     pub voters_pk: Vec<BigUint>,
+}
+#[derive(Clone)]
+pub struct Configuration {
+    pub pem_config: PemConfig,
+    pub existing_votes: ExistingVotes,
 }
 impl KeyStore {
     fn new() -> Self { Self {voters_pk: Vec::<BigUint>::new()} }
@@ -44,9 +54,13 @@ async fn main() -> Result<(), Error> {
 
     builder.init();
 
-
+    let should_exit = Arc::new(Notify::new());
     // Configure the application from pem_config.json
     let pem_config: PemConfig = serde_json::from_slice(fs::read("pem_config.json").expect("Failed to read pem_config.json").as_slice()).unwrap();
+    // This is used to fake the gathering of the PKs/Nonces before pushing them out
+    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("existing_votes.json").expect("Failed to read existing_votes.json").as_slice()).unwrap();
+    let configuration = Configuration { pem_config, existing_votes };
+
     let key_store: KS = Arc::new(Mutex::new(KeyStore::new()));
 
     let ws_server_addr = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8001".to_string());
@@ -57,19 +71,19 @@ async fn main() -> Result<(), Error> {
     let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
 
 
-    tokio::spawn(communicate_with_voting_app(voting_app_url, stdin_rx));
+    tokio::spawn(communicate_with_voting_app(voting_app_url, stdin_rx, should_exit.clone()));
     let try_socket = TcpListener::bind(&ws_server_addr).await;
     let listener = try_socket.expect("Failed to bind");
     info!("Listening on: {}", ws_server_addr);
 
     while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream, stdin_tx.clone(), pem_config.clone(), key_store.clone()));
+        tokio::spawn(accept_connection(stream, stdin_tx.clone(), configuration.clone(), key_store.clone(), should_exit.clone()));
     }
 
     Ok(())
 }
 
-async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channel::mpsc::UnboundedReceiver<Message>) {
+async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channel::mpsc::UnboundedReceiver<Message>, should_exit: Arc<Notify>) {
     let (voting_app_stream, _) = connect_async(voting_app_url).await.expect("Failed to connect to voting app server");
     let (mut voting_app_write, _) = voting_app_stream.split();
 
@@ -77,10 +91,22 @@ async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channe
         // rx.map(Ok).forward(voting_app_write).await?;
         info!("Sending data to voting server.");
         let _ = voting_app_write.send(message).await;
+        let _ = voting_app_write.close().await;
+        break;
+    }
+    // Race condition hotfix
+    match timeout(Duration::from_secs(3), should_exit.notified()).await {
+        Ok(_) => {
+            info!("PEM service withis no longer needed within the protocol. Exiting.");
+            std::process::exit(0);
+        }
+        Err(_) => {
+            should_exit.notify_waiters();
+        }
     }
 }
 
-async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>, pem_config: PemConfig, key_store: KS) {
+async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::UnboundedSender<Message>, configuration: Configuration, key_store: KS, should_exit: Arc<Notify>) {
     let addr = stream.peer_addr().expect("connected streams should have a peer address");
     info!("Peer address: {}", addr);
 
@@ -90,6 +116,10 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
 
     info!("New WebSocket connection: {}", addr);
     let (mut write, mut read) = ws_stream.split();
+    // This is here to fake the collection and mixing of the pks/nonces that are sent to the voting server
+    // It will get attached to the users PKs/Nonces shuffled and sent
+    let mut nonce_vec_others: Vec<BigUint> = configuration.existing_votes.nonce_vec.clone();
+    let mut el_gamal_pks_others: Vec<BigUint> = configuration.existing_votes.el_gamal_pks.clone();
 
     while let Some(result) = read.next().await {
         match result {
@@ -107,15 +137,28 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                         }
                         let el_gamal_components = certificate_data.data.el_gamal_components.clone();
                         info!("Certificate is valid. Decrypting.");
-                        let pem_sk = pem_config.pem_rsa_sk.clone();
+                        let pem_sk = configuration.pem_config.pem_rsa_sk.clone();
                         let subj_data = decipher_subj_data(certificate_data.clone(), pem_sk);
 
                         debug!("{:?}", subj_data);
 
                         let mut el_gamal_cipher: ElGamalCipher = ElGamalCipher::from(el_gamal_components.clone(), KeyPair {x: BigUint::zero(), y: subj_data.el_gamal_public_key.clone()});
-                        let (mut el_gamal_pks, alphas_data) = create_el_gamal_keys_and_alphas(el_gamal_components, subj_data.el_gamal_public_key.clone(), subj_data.share_count);
-                        let nonce_vec: Vec<BigUint> = (0..el_gamal_pks.len()).map(|_| el_gamal_cipher.generate_nonce()).collect();
+                        let (el_gamal_pks_user, alphas_data) = create_el_gamal_keys_and_alphas(el_gamal_components, subj_data.el_gamal_public_key.clone(), subj_data.share_count);
+                        let nonce_vec_user: Vec<BigUint> = (0..el_gamal_pks_user.len()).map(|_| el_gamal_cipher.generate_nonce()).collect();
+
+                        // This is here only to fake the simulation that other people vote
+                        let mut el_gamal_pks = el_gamal_pks_user.clone();
+                        el_gamal_pks.append(&mut el_gamal_pks_others);
+                        let mut nonce_vec = nonce_vec_user.clone();
+                        nonce_vec.append(&mut nonce_vec_others);
+
+                        let mut combined_for_shuffling: Vec<(BigUint, BigUint)> = el_gamal_pks.into_iter().zip(nonce_vec.into_iter()).collect();
+                        combined_for_shuffling.shuffle(&mut thread_rng());
+
+                        let (mut el_gamal_pks, nonce_vec): (Vec<BigUint>, Vec<BigUint>) = combined_for_shuffling.into_iter().unzip();
+
                         let keys_data = KeysData { el_gamal_pks: el_gamal_pks.clone(), nonce_vec: nonce_vec.clone() };
+
                         let msg = MessageType::KeysData(keys_data.clone());
                         tx.unbounded_send(Message::from(serde_json::to_string(&msg).unwrap())).unwrap();
                         key_store.lock().unwrap().voters_pk.append(&mut el_gamal_pks);
@@ -123,7 +166,7 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                         let encrypted_alphas: Vec<EncryptedMessage> = alphas_data.into_iter().map(|alpha| el_gamal_cipher.encrypt(alpha).unwrap_or_else(|e| {error!("Failed to encrypt alphas."); panic!("{:?}", e)})).collect();
 
                         let mut rng = StdRng::from_entropy();
-                        let encrypted_nonce_vec: Vec<Vec<u8>> = nonce_vec.iter().map(|nonce| {
+                        let encrypted_nonce_vec: Vec<Vec<u8>> = nonce_vec_user.iter().map(|nonce| {
                             let padding = Oaep::new::<Sha256>();
                             certificate_data.data.client_pk.encrypt(&mut rng, padding, &nonce.to_bytes_be()[..]).expect("failed to encrypt")
                         }).collect();
@@ -131,6 +174,12 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
                         info!("Encryption done, sending the following: {:?}", msg);
 
                         let _ = write.send(Message::from(serde_json::to_string(&msg).unwrap())).await;
+
+                        should_exit.notify_waiters();
+                        should_exit.notified().await;
+                        // Race condition hotfix
+                        info!("PEM service is no longer needed within the protocol. Exiting.");
+                        std::process::exit(0);
                     },
                     _other => info!("MessageType: {:?} received.", _other)
                 }
