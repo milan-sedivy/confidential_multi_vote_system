@@ -57,6 +57,14 @@ impl CandidatePool {
         }
     }
 
+    pub fn reset(&mut self) {
+        self.pool.iter_mut().for_each(|(_, candidate)| {
+            candidate.vote_count.no = 0;
+            candidate.vote_count.yes = 0;
+            candidate.vote_count.none = 0;
+        });
+    }
+
     pub fn add_candidate(&mut self, statement: &str) {
         let new_candidate = Candidate::new(statement);
         self.pool.entry(self.last_candidate_num).or_insert(new_candidate);

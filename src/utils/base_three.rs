@@ -41,6 +41,7 @@ impl BaseThree {
         return self.value;
     }
 }
+#[allow(dead_code)]
 impl BaseTen {
     pub fn new(num: u64) -> BaseTen {
         BaseTen(num)

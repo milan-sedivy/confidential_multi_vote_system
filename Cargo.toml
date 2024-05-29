@@ -43,3 +43,7 @@ path = "src/generate_configs.rs"
 [[bin]]
 name = "key_share_holders"
 path = "src/key_share_holders.rs"
+
+[[bin]]
+name = "generate_votes"
+path = "src/generate_votes.rs"
