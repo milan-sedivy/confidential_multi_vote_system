@@ -25,6 +25,7 @@ use crate::crypto_schemes::paillier::{PaillierCombiner};
 use crate::utils::base_three::{BaseTen};
 use crate::utils::candidate::CandidatePool;
 
+const M: u64 = 10;
 type Tx = UnboundedSender<Message>;
 #[derive(Clone)]
 pub struct SharedVotes {
@@ -185,7 +186,7 @@ fn calculate_votes(combined: &mut BigUint) {
     candidate_pool.add_candidate("Do you approve the proposed dividend payment of 230CZK per share to shareholders for the fiscal year 2023?");
     candidate_pool.add_candidate("Do you approve the proposed merger with StestiAuto a.s., involving a stock exchange of 1.5 shares of our company for each share of StestiAuto a.s.?");
     for current_exponent in (0..=80).rev() {
-        let div = BigUint::from(10u8).pow(current_exponent as u32);
+        let div = BigUint::from(M).pow(current_exponent as u32);
         let times = combined.clone().div(&div).to_bytes_be().as_slice().try_into().unwrap();
         let replace = combined.clone().rem(&div);
         *combined = replace;
