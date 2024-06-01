@@ -127,8 +127,6 @@ impl CandidatePool {
                 0 => candidate.vote_none(),
                 _ => println!("Incorrect vote")
             }
-        } else {
-            println!("Incorrect candidate number");
         }
     }
 }
