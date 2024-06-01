@@ -47,12 +47,9 @@ pub struct DecryptedShares(pub Vec<BigUint>);
 #[derive(Debug, Serialize, Deserialize)]
 pub enum MessageType {
     EncryptedVote(VoteData), //Sent by client to voting_server
- //   PailierData(Data),
     KeysData(KeysData), //Used by pem_server to communicate with client and voting_server
     EncryptedAlphas(EncryptedAlphas),
- //   ElGamalData(ElGamalComponents, BigUint),
     Certificate(MockCertificate), //Sent by client to pem server
- //   KeyRequest, //Sent by voting_server to pem_server
     DecryptionRequest(EncryptedTally),
     DecryptionResponse(DecryptedShares),
     RequestEncryptedTally,
