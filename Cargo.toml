@@ -1,5 +1,5 @@
 [package]
-name = "shareholder_crypto"
+name = "confidential_multi_vote_system"
 version = "0.3.2"
 edition = "2021"
 
