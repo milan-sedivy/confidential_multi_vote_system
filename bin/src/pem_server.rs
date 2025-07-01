@@ -62,7 +62,7 @@ async fn main() -> Result<(), Error> {
     let ws_server_url = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8001".to_string());
     let voting_app_url = env::args().nth(2).unwrap_or_else(|| "ws://127.0.0.1:8002".to_string());
     // Create the event loop and TCP listener we'll accept connections on.
-    
+
     let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
 
 

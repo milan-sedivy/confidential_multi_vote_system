@@ -16,10 +16,7 @@ use rsa::pss::BlindedSigningKey;
 use rsa::sha2::Sha256;
 use rsa::signature::{Keypair, RandomizedSigner, SignatureEncoding};
 use cryptographic_system::crypto_schemes::el_gamal::ElGamalGenerator;
-use cryptographic_system::configs::client::ClientConfig;
-use cryptographic_system::configs::pem::PemConfig;
-use cryptographic_system::configs::voting_server::VotingServerConfig;
-use cryptographic_system::configs::certificate::*;
+use cryptographic_system::configs::{client::ClientConfig, pem::PemConfig, voting_server::VotingServerConfig, certificate::*};
 use cryptographic_system::crypto_schemes::paillier::{Generator, PaillierGenerator};
 
 fn main() {
