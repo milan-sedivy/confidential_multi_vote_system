@@ -52,9 +52,9 @@ async fn main() -> Result<(), Error> {
 
     let should_exit = Arc::new(Notify::new());
     // Configure the application from pem_config.json
-    let pem_config: PemConfig = serde_json::from_slice(fs::read("../../pem_config.json").expect("Failed to read pem_config.json").as_slice()).unwrap();
+    let pem_config: PemConfig = serde_json::from_slice(fs::read("pem_config.json").expect("Failed to read pem_config.json").as_slice()).unwrap();
     // This is used to fake the gathering of the PKs/Nonces before pushing them out
-    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("../../existing_votes.json").expect("Failed to read existing_votes.json").as_slice()).unwrap();
+    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("existing_votes.json").expect("Failed to read existing_votes.json").as_slice()).unwrap();
     let configuration = Configuration { pem_config, existing_votes };
 
     let key_store: KS = Arc::new(Mutex::new(KeyStore::new()));

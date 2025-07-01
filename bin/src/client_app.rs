@@ -28,7 +28,7 @@ async fn main() {
 
     builder.init();
 
-    let client_config: ClientConfig = serde_json::from_slice(fs::read("../../client_config.json").unwrap_or_else(|e| { error!("Failed to open client_config.json"); panic!("{}", e) } ).as_slice()).unwrap();
+    let client_config: ClientConfig = serde_json::from_slice(fs::read("client_config.json").unwrap_or_else(|e| { error!("Failed to open client_config.json"); panic!("{}", e) } ).as_slice()).unwrap();
     // To encrypt we don't need a share or delta
     let paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
     let elgamal_signer = ElGamalSigner::from(client_config.el_gamal_components.clone(), client_config.el_gamal_kp.clone());
@@ -42,7 +42,7 @@ async fn main() {
     info!("WebSocket handshake has been successfully completed");
     let (mut write, mut read) = ws_stream.split();
     let cert = serde_json::from_slice(
-        fs::read("../../certificate.json").unwrap_or_else(|e| { error!("Failed to open certificate.json"); panic!("{}", e) })
+        fs::read("certificate.json").unwrap_or_else(|e| { error!("Failed to open certificate.json"); panic!("{}", e) })
             .as_slice())
         .unwrap_or_else(|e| { error!("Malformed certificate file."); panic!("{}", e) });
     let msg = MessageType::Certificate(cert);

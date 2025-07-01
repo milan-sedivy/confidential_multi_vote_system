@@ -29,13 +29,7 @@ pub struct SharedVotes {
     accepted_keys_with_nonce: HashMap<BigUint,BigUint>,
     encrypted_tally: BigUint,
 }
-/*
-Goals:
-Client ---> Encrypted Vote
-Encrypted Vote --> Add to tally (check_and_remove_key)
-Server ---> add key
 
-*/
 unsafe impl Send for SharedVotes {}
 impl SharedVotes {
     pub fn new() -> Self {
@@ -84,8 +78,8 @@ async fn main() -> Result<(), Error> {
     builder.target(Target::Stdout);
 
     builder.init();
-    let voting_server_config = fs::read("../../voting_server_config.json").unwrap_or_else(|e| { error!("Failed to read voting_server_config.json"); panic!("{}", e)});
-    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("../../existing_votes.json").unwrap_or_else(|e| panic!("{}", e)).as_slice()).unwrap();
+    let voting_server_config = fs::read("voting_server_config.json").unwrap_or_else(|e| { error!("Failed to read voting_server_config.json"); panic!("{}", e)});
+    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("existing_votes.json").unwrap_or_else(|e| panic!("{}", e)).as_slice()).unwrap();
 
     let voting_server_config: VotingServerConfig = serde_json::from_slice(&voting_server_config[..]).unwrap_or_else(|e| { error!("Failed to deserialize voting server config"); panic!("{}", e)});
     let voting_ballot = Arc::new(Mutex::new(SharedVotes::new()));

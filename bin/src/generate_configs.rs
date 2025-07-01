@@ -66,7 +66,7 @@ fn main() {
     };
     let client_config = serde_json::to_string(&client_config).unwrap();
 
-    fs::write("../../client_config.json", client_config).expect("Failed to write to client_config.json");
+    fs::write("client_config.json", client_config).expect("Failed to write to client_config.json");
     println!("   ---- DONE");
 
     // pem config
@@ -78,7 +78,7 @@ fn main() {
     };
     let pem_config = serde_json::to_string(&pem_config).unwrap();
 
-    fs::write("../../pem_config.json", pem_config).expect("Failed to write to pem_config.json");
+    fs::write("pem_config.json", pem_config).expect("Failed to write to pem_config.json");
     println!("   ---- DONE");
     //voting_server config
     print!("= Creating voting_server_config.json");
@@ -92,7 +92,7 @@ fn main() {
     };
     let voting_server_config = serde_json::to_string(&voting_server_config).unwrap();
 
-    fs::write("../../voting_server_config.json", voting_server_config).expect("Failed to write to voting_server_config.json");
+    fs::write("voting_server_config.json", voting_server_config).expect("Failed to write to voting_server_config.json");
     println!("   ---- DONE");
 
 
@@ -144,7 +144,7 @@ fn main() {
         signature, // CA signature
     };
     let certificate = serde_json::to_string(&certificate).unwrap();
-    fs::write("../../certificate.json", certificate).unwrap();
+    fs::write("certificate.json", certificate).unwrap();
 
     println!("-------------");
     println!("STEP3 - DONE.");

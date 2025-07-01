@@ -39,7 +39,7 @@ pub struct ElGamalComponents {
 
 impl ElGamalComponents {
     pub fn generate_random(&mut self, rng: &mut ThreadRng) -> BigUint {
-        let upper_bound = self.q.clone() - BigUint::from(2u8);
+        let upper_bound = &self.q - BigUint::from(2u8);
         let lower_bound = BigUint::from(2u8);
         rng.gen_biguint_range(&lower_bound, &upper_bound)
     }
@@ -141,7 +141,6 @@ impl ElGamalVerifier {
         let mut alphas = Vec::<BigUint>::new();
         while result.iter().count() < count {
             let alpha = self.generate_alpha();
-            // If order wouldn't be important we would just use a hashset here.
             if alphas.iter().find(|e| **e == alpha).is_some() {
                 continue;
             }
@@ -166,7 +165,7 @@ impl Encryption for ElGamalCipher {
         Ok(EncryptedMessage(c1, c2))
     }
     fn decrypt(&mut self, encrypted_message: EncryptedMessage) -> Result<BigUint,CryptoError> {
-        let q_minus_x = self.components.q.clone() - self.key_pair.x.clone();
+        let q_minus_x = &self.components.q - &self.key_pair.x;
         let s_inverse = encrypted_message.0.modpow(&q_minus_x, &self.components.p);
 
         Ok((encrypted_message.1 * s_inverse) % &self.components.p)
@@ -204,7 +203,7 @@ impl Verify for ElGamalVerifier {
 
         let lhs = self.components.g.modpow(&hash_dec, &modulo);
         let rhs = y.modpow(&signature.0, &modulo)*signature.0.modpow(&signature.1, &modulo);
-        return lhs == (rhs % &modulo)
+        lhs == (rhs % &modulo)
     }
 }
 unsafe impl Send for ElGamalGenerator {}

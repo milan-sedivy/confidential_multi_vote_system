@@ -11,7 +11,7 @@ const M: u64 = 10;
 
 fn main() {
     //We will use client's config to generate the signatures using the existing components from the other voters
-    let client_config: ClientConfig = serde_json::from_slice(fs::read("../../client_config.json").unwrap().as_slice()).unwrap();
+    let client_config: ClientConfig = serde_json::from_slice(fs::read("client_config.json").unwrap().as_slice()).unwrap();
     let mut paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
     let el_gamal = ElGamalGenerator::from(client_config.el_gamal_components.clone());
     let mut el_gamal_cipher = ElGamalCipher::from(client_config.el_gamal_components, el_gamal.key_pair.clone());
@@ -63,6 +63,6 @@ fn main() {
         casted_votes,
     };
 
-    let _= fs::write("../../existing_votes.json", serde_json::to_string(&existing_votes).unwrap());
+    let _= fs::write("existing_votes.json", serde_json::to_string(&existing_votes).unwrap());
     println!("Done generating existing_votes.json")
 }

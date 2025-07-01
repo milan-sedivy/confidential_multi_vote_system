@@ -22,7 +22,7 @@ async fn main() -> Result<(), Error> {
 
 
     // Shares are already within the voting_server_config so we'll use that
-    let voting_server_config: VotingServerConfig = serde_json::from_slice(fs::read("../../voting_server_config.json").expect("Failed to read voting_server_config.json").as_slice()).unwrap();
+    let voting_server_config: VotingServerConfig = serde_json::from_slice(fs::read("voting_server_config.json").expect("Failed to read voting_server_config.json").as_slice()).unwrap();
     let mut paillier_share_holders: Vec<PaillierCipher> = Vec::<PaillierCipher>::new();
     voting_server_config.paillier_sk_shares.iter().for_each( |share| {
         paillier_share_holders.push(PaillierCipher::init_from(&voting_server_config.paillier_pk, share, voting_server_config.delta.clone()));
