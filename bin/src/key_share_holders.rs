@@ -1,6 +1,3 @@
-mod configs;
-mod crypto_schemes;
-mod data;
 use std::{env, fs};
 use std::io::Error;
 use env_logger::{Builder, Target};
@@ -11,9 +8,9 @@ use num_bigint::BigUint;
 use tokio::io::AsyncReadExt;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
-use crate::configs::voting_server::VotingServerConfig;
-use crate::crypto_schemes::paillier::{Cipher, PaillierCipher};
-use crate::data::{DecryptedShares, MessageType};
+use cryptographic_system::configs::voting_server::VotingServerConfig;
+use cryptographic_system::crypto_schemes::paillier::{Cipher, PaillierCipher};
+use cryptographic_system::data::{DecryptedShares, MessageType};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -25,14 +22,13 @@ async fn main() -> Result<(), Error> {
 
 
     // Shares are already within the voting_server_config so we'll use that
-    let voting_server_config: VotingServerConfig = serde_json::from_slice(fs::read("voting_server_config.json").expect("Failed to read voting_server_config.json").as_slice()).unwrap();
+    let voting_server_config: VotingServerConfig = serde_json::from_slice(fs::read("../../voting_server_config.json").expect("Failed to read voting_server_config.json").as_slice()).unwrap();
     let mut paillier_share_holders: Vec<PaillierCipher> = Vec::<PaillierCipher>::new();
     voting_server_config.paillier_sk_shares.iter().for_each( |share| {
         paillier_share_holders.push(PaillierCipher::init_from(&voting_server_config.paillier_pk, share, voting_server_config.delta.clone()));
     });
 
-    let voting_app_addr = env::args().nth(2).unwrap_or_else(|| "ws://127.0.0.1:8002".to_string());
-    let voting_app_url = url::Url::parse(&voting_app_addr).unwrap();
+    let voting_app_url = env::args().nth(2).unwrap_or_else(|| "ws://127.0.0.1:8002".to_string());
 
     let mut stdin = tokio::io::stdin();
 

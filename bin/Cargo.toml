@@ -1,0 +1,46 @@
+[package]
+name = "confidential_voting_system"
+version = "0.3.3"
+edition = "2021"
+
+[dependencies]
+cryptographic_system = { path = "../lib" }
+tokio-tungstenite = "*"
+ws = "0.9.2"
+futures-channel = "0.3.30"
+futures-util = "0.3.30"
+tokio = { version = "1.37.0", features = ["rt", "rt-multi-thread", "macros", "io-std", "sync", "time"] }
+env_logger = "0.11.3"
+log = "0.4.21"
+url = "2.5.0"
+aes-gcm = "0.10.3"
+serde_json = "1.0.117"
+hex-literal = "0.4.1"
+serde = { workspace = true }
+rsa = { workspace = true }
+rand = { workspace = true }
+num-bigint = { workspace = true }
+
+[[bin]]
+name = "client_app"
+path = "src/client_app.rs"
+
+[[bin]]
+name = "voting_server"
+path = "src/voting_server.rs"
+
+[[bin]]
+name = "pem_server"
+path = "src/pem_server.rs"
+
+[[bin]]
+name = "generate_configs"
+path = "src/generate_configs.rs"
+
+[[bin]]
+name = "key_share_holders"
+path = "src/key_share_holders.rs"
+
+[[bin]]
+name = "generate_votes"
+path = "src/generate_votes.rs"

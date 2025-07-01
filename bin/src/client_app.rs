@@ -1,12 +1,11 @@
 #![allow(dead_code)]
 use std::fs;
 use num_bigint::{BigUint};
-use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalSigner, Encryption, Signature};
-use crate::crypto_schemes::paillier::{Cipher, PaillierCipher};
-
-use crate::configs::client::ClientConfig;
-use crate::data::{MessageType, VoteData};
-use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
+use cryptographic_system::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalSigner, Encryption, Signature};
+use cryptographic_system::crypto_schemes::paillier::{Cipher, PaillierCipher};
+use cryptographic_system::configs::client::ClientConfig;
+use cryptographic_system::data::{MessageType, VoteData};
+use cryptographic_system::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
 use env_logger::{Builder, Target};
 use futures_util::{future, pin_mut, SinkExt, StreamExt};
 use log::{error, info, warn};
@@ -15,14 +14,10 @@ use rsa::Oaep;
 use rsa::sha2::Sha256;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use crate::data::MessageType::{EncryptedVote};
-use crate::utils::base_three::{BaseTen};
+use cryptographic_system::data::MessageType::{EncryptedVote};
+use cryptographic_system::utils::base_three::{BaseTen};
 
-mod crypto_schemes;
-mod utils;
-mod data;
-mod configs;
-type ElGamalKeyPair = crate::crypto_schemes::el_gamal::KeyPair;
+type ElGamalKeyPair = cryptographic_system::crypto_schemes::el_gamal::KeyPair;
 
 const M: u64 = 10;
 #[tokio::main]
@@ -33,12 +28,12 @@ async fn main() {
 
     builder.init();
 
-    let client_config: ClientConfig = serde_json::from_slice(fs::read("client_config.json").unwrap_or_else(|e| { error!("Failed to open client_config.json"); panic!("{}", e) } ).as_slice()).unwrap();
+    let client_config: ClientConfig = serde_json::from_slice(fs::read("../../client_config.json").unwrap_or_else(|e| { error!("Failed to open client_config.json"); panic!("{}", e) } ).as_slice()).unwrap();
     // To encrypt we don't need a share or delta
     let paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
     let elgamal_signer = ElGamalSigner::from(client_config.el_gamal_components.clone(), client_config.el_gamal_kp.clone());
     let mut elgamal_cipher: ElGamalCipher = ElGamalCipher::from(client_config.el_gamal_components, client_config.el_gamal_kp.clone());
-    let url = url::Url::parse("ws://127.0.0.1:8001").unwrap();
+    let url = "ws://127.0.0.1:8001";
 
     let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
 
@@ -47,7 +42,7 @@ async fn main() {
     info!("WebSocket handshake has been successfully completed");
     let (mut write, mut read) = ws_stream.split();
     let cert = serde_json::from_slice(
-        fs::read("certificate.json").unwrap_or_else(|e| { error!("Failed to open certificate.json"); panic!("{}", e) })
+        fs::read("../../certificate.json").unwrap_or_else(|e| { error!("Failed to open certificate.json"); panic!("{}", e) })
             .as_slice())
         .unwrap_or_else(|e| { error!("Malformed certificate file."); panic!("{}", e) });
     let msg = MessageType::Certificate(cert);
@@ -80,7 +75,7 @@ async fn main() {
         },
         _ => {warn!("Received unexpected MessageType, program might fail.")}
     }
-    let url = url::Url::parse("ws://127.0.0.1:8002").unwrap();
+    let url = "ws://127.0.0.1:8002";
     let (ws_stream, _) = connect_async(url).await.unwrap_or_else(|e| { error!("Failed to connect"); panic!("{}", e) });
     let (write, read) = ws_stream.split();
 
@@ -101,7 +96,7 @@ async fn read_stdin(tx: futures_channel::mpsc::UnboundedSender<Message>, mut pai
     let mut stdin = tokio::io::stdin();
     // Create the candidate pool locally, because we are only demonstrating the principles,
     // normally this would be received from the voting server.
-    let mut candidate_pool = utils::candidate::CandidatePool::new();
+    let mut candidate_pool = cryptographic_system::utils::candidate::CandidatePool::new();
     candidate_pool.add_candidate("Do you approve the re-election of the following candidate: Marie Novotna to the board of directors?");
     candidate_pool.add_candidate("Do you approve the proposed executive compensation packages for the CEO Jan Cerny - 300k CZK salary plus 1mil CZK in stock options?");
     candidate_pool.add_candidate("Do you approve the proposed dividend payment of 230CZK per share to shareholders for the fiscal year 2023?");

@@ -1,21 +1,17 @@
 use std::fs;
 use num_bigint::BigUint;
-use crate::configs::client::ClientConfig;
-use crate::configs::existing_votes::ExistingVotes;
-use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalGenerator, ElGamalVerifier};
-use crate::crypto_schemes::paillier::{PaillierCipher, Cipher};
-use crate::crypto_schemes::bigint::UsefulConstants;
-use crate::utils::base_three::BaseTen;
+use cryptographic_system::configs::client::ClientConfig;
+use cryptographic_system::configs::existing_votes::ExistingVotes;
+use cryptographic_system::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalGenerator, ElGamalVerifier};
+use cryptographic_system::crypto_schemes::paillier::{PaillierCipher, Cipher};
+use cryptographic_system::crypto_schemes::bigint::UsefulConstants;
+use cryptographic_system::utils::base_three::BaseTen;
 
 const M: u64 = 10;
 
-mod utils;
-mod crypto_schemes;
-mod configs;
-mod data;
 fn main() {
     //We will use client's config to generate the signatures using the existing components from the other voters
-    let client_config: ClientConfig = serde_json::from_slice(fs::read("client_config.json").unwrap().as_slice()).unwrap();
+    let client_config: ClientConfig = serde_json::from_slice(fs::read("../../client_config.json").unwrap().as_slice()).unwrap();
     let mut paillier_cipher = PaillierCipher::init_from(&client_config.paillier_pk, &BigUint::zero(), 0);
     let el_gamal = ElGamalGenerator::from(client_config.el_gamal_components.clone());
     let mut el_gamal_cipher = ElGamalCipher::from(client_config.el_gamal_components, el_gamal.key_pair.clone());
@@ -26,7 +22,7 @@ fn main() {
     let mut nonce_vec = Vec::<BigUint>::new();
     (0..5).for_each(|_| nonce_vec.push(el_gamal_cipher.generate_nonce()));
     //let key_data = KeysData { el_gamal_pks, nonce_vec: nonce_vec.clone() };
-    let mut candidate_pool = utils::candidate::CandidatePool::new();
+    let mut candidate_pool = cryptographic_system::utils::candidate::CandidatePool::new();
     (0..4).for_each(|_| candidate_pool.add_candidate(""));
 
     (0..2).for_each(|i| {
@@ -67,6 +63,6 @@ fn main() {
         casted_votes,
     };
 
-    let _= fs::write("existing_votes.json", serde_json::to_string(&existing_votes).unwrap());
+    let _= fs::write("../../existing_votes.json", serde_json::to_string(&existing_votes).unwrap());
     println!("Done generating existing_votes.json")
 }

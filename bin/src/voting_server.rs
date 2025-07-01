@@ -1,11 +1,7 @@
 #![allow(dead_code)]
-pub mod crypto_schemes;
-mod data;
-mod configs;
-mod utils;
-use crate::data::{EncryptedTally, KeysData, MessageType};
-use crate::crypto_schemes::el_gamal::*;
-use crate::crypto_schemes::bigint::*;
+use cryptographic_system::data::{EncryptedTally, KeysData, MessageType};
+use cryptographic_system::crypto_schemes::el_gamal::*;
+use cryptographic_system::crypto_schemes::bigint::*;
 use std::{env, fs};
 use std::collections::HashMap;
 use std::io::{Error};
@@ -19,11 +15,11 @@ use log::LevelFilter::Info;
 use num_bigint::BigUint;
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
-use crate::configs::existing_votes::ExistingVotes;
-use crate::configs::voting_server::VotingServerConfig;
-use crate::crypto_schemes::paillier::{PaillierCombiner};
-use crate::utils::base_three::{BaseTen};
-use crate::utils::candidate::CandidatePool;
+use cryptographic_system::configs::existing_votes::ExistingVotes;
+use cryptographic_system::configs::voting_server::VotingServerConfig;
+use cryptographic_system::crypto_schemes::paillier::{PaillierCombiner};
+use cryptographic_system::utils::base_three::{BaseTen};
+use cryptographic_system::utils::candidate::CandidatePool;
 
 const M: u64 = 10;
 type Tx = UnboundedSender<Message>;
@@ -88,8 +84,8 @@ async fn main() -> Result<(), Error> {
     builder.target(Target::Stdout);
 
     builder.init();
-    let voting_server_config = fs::read("voting_server_config.json").unwrap_or_else(|e| { error!("Failed to read voting_server_config.json"); panic!("{}", e)});
-    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("existing_votes.json").unwrap_or_else(|e| panic!("{}", e)).as_slice()).unwrap();
+    let voting_server_config = fs::read("../../voting_server_config.json").unwrap_or_else(|e| { error!("Failed to read voting_server_config.json"); panic!("{}", e)});
+    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("../../existing_votes.json").unwrap_or_else(|e| panic!("{}", e)).as_slice()).unwrap();
 
     let voting_server_config: VotingServerConfig = serde_json::from_slice(&voting_server_config[..]).unwrap_or_else(|e| { error!("Failed to deserialize voting server config"); panic!("{}", e)});
     let voting_ballot = Arc::new(Mutex::new(SharedVotes::new()));

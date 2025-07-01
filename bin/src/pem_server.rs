@@ -22,16 +22,12 @@ use tokio::sync::Notify;
 use tokio::time::timeout;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
-use url::Url;
-use crate::configs::certificate::{CertificateData, MockCertificate, SubjData};
-use crate::configs::existing_votes::ExistingVotes;
-use crate::configs::pem::PemConfig;
-use crate::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
-use crate::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalVerifier, KeyPair, Encryption, EncryptedMessage};
-mod data;
-mod configs;
-mod crypto_schemes;
-use crate::data::*;
+use cryptographic_system::configs::certificate::{CertificateData, MockCertificate, SubjData};
+use cryptographic_system::configs::existing_votes::ExistingVotes;
+use cryptographic_system::configs::pem::PemConfig;
+use cryptographic_system::crypto_schemes::bigint::{BetterFormattingVec, UsefulConstants};
+use cryptographic_system::crypto_schemes::el_gamal::{ElGamalCipher, ElGamalComponents, ElGamalVerifier, KeyPair, Encryption, EncryptedMessage};
+use cryptographic_system::data::*;
 unsafe impl Send for KeyStore {}
 #[derive(Clone)]
 pub struct KeyStore {
@@ -56,25 +52,24 @@ async fn main() -> Result<(), Error> {
 
     let should_exit = Arc::new(Notify::new());
     // Configure the application from pem_config.json
-    let pem_config: PemConfig = serde_json::from_slice(fs::read("pem_config.json").expect("Failed to read pem_config.json").as_slice()).unwrap();
+    let pem_config: PemConfig = serde_json::from_slice(fs::read("../../pem_config.json").expect("Failed to read pem_config.json").as_slice()).unwrap();
     // This is used to fake the gathering of the PKs/Nonces before pushing them out
-    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("existing_votes.json").expect("Failed to read existing_votes.json").as_slice()).unwrap();
+    let existing_votes: ExistingVotes = serde_json::from_slice(fs::read("../../existing_votes.json").expect("Failed to read existing_votes.json").as_slice()).unwrap();
     let configuration = Configuration { pem_config, existing_votes };
 
     let key_store: KS = Arc::new(Mutex::new(KeyStore::new()));
 
-    let ws_server_addr = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8001".to_string());
-    let voting_app_addr = env::args().nth(2).unwrap_or_else(|| "ws://127.0.0.1:8002".to_string());
+    let ws_server_url = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8001".to_string());
+    let voting_app_url = env::args().nth(2).unwrap_or_else(|| "ws://127.0.0.1:8002".to_string());
     // Create the event loop and TCP listener we'll accept connections on.
-    let voting_app_url = url::Url::parse(&voting_app_addr).unwrap();
-
+    
     let (stdin_tx, stdin_rx) = futures_channel::mpsc::unbounded();
 
 
     tokio::spawn(communicate_with_voting_app(voting_app_url, stdin_rx, should_exit.clone()));
-    let try_socket = TcpListener::bind(&ws_server_addr).await;
+    let try_socket = TcpListener::bind(&ws_server_url).await;
     let listener = try_socket.expect("Failed to bind");
-    info!("Listening on: {}", ws_server_addr);
+    info!("Listening on: {}", ws_server_url);
 
     while let Ok((stream, _)) = listener.accept().await {
         tokio::spawn(accept_connection(stream, stdin_tx.clone(), configuration.clone(), key_store.clone(), should_exit.clone()));
@@ -83,12 +78,11 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-async fn communicate_with_voting_app(voting_app_url: Url, mut rx: futures_channel::mpsc::UnboundedReceiver<Message>, should_exit: Arc<Notify>) {
+async fn communicate_with_voting_app(voting_app_url: String, mut rx: futures_channel::mpsc::UnboundedReceiver<Message>, should_exit: Arc<Notify>) {
     let (voting_app_stream, _) = connect_async(voting_app_url).await.expect("Failed to connect to voting app server");
     let (mut voting_app_write, _) = voting_app_stream.split();
 
     while let Some(message) = rx.next().await {
-        // rx.map(Ok).forward(voting_app_write).await?;
         info!("Sending data to voting server.");
         let _ = voting_app_write.send(message).await;
         let _ = voting_app_write.close().await;

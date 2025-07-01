@@ -6,8 +6,7 @@
 // - PEM encryption key ------------ (pem_cfg.json)
 // - Client encrypt/decrypt keys --- (client_cfg.json)
 
-mod crypto_schemes;
-mod configs;
+
 use std::fs;
 use aes_gcm::{AeadCore, Aes256Gcm, KeyInit, Nonce};
 use aes_gcm::aead::Aead;
@@ -16,12 +15,12 @@ use rsa::pkcs1::{EncodeRsaPublicKey};
 use rsa::pss::BlindedSigningKey;
 use rsa::sha2::Sha256;
 use rsa::signature::{Keypair, RandomizedSigner, SignatureEncoding};
-use crate::crypto_schemes::el_gamal::ElGamalGenerator;
-use crate::configs::client::ClientConfig;
-use crate::configs::pem::PemConfig;
-use crate::configs::voting_server::VotingServerConfig;
-use crate::configs::certificate::*;
-use crate::crypto_schemes::paillier::{Generator, PaillierGenerator};
+use cryptographic_system::crypto_schemes::el_gamal::ElGamalGenerator;
+use cryptographic_system::configs::client::ClientConfig;
+use cryptographic_system::configs::pem::PemConfig;
+use cryptographic_system::configs::voting_server::VotingServerConfig;
+use cryptographic_system::configs::certificate::*;
+use cryptographic_system::crypto_schemes::paillier::{Generator, PaillierGenerator};
 
 fn main() {
     println!("-------------");
@@ -70,7 +69,7 @@ fn main() {
     };
     let client_config = serde_json::to_string(&client_config).unwrap();
 
-    fs::write("client_config.json", client_config).expect("Failed to write to client_config.json");
+    fs::write("../../client_config.json", client_config).expect("Failed to write to client_config.json");
     println!("   ---- DONE");
 
     // pem config
@@ -82,7 +81,7 @@ fn main() {
     };
     let pem_config = serde_json::to_string(&pem_config).unwrap();
 
-    fs::write("pem_config.json", pem_config).expect("Failed to write to pem_config.json");
+    fs::write("../../pem_config.json", pem_config).expect("Failed to write to pem_config.json");
     println!("   ---- DONE");
     //voting_server config
     print!("= Creating voting_server_config.json");
@@ -96,7 +95,7 @@ fn main() {
     };
     let voting_server_config = serde_json::to_string(&voting_server_config).unwrap();
 
-    fs::write("voting_server_config.json", voting_server_config).expect("Failed to write to voting_server_config.json");
+    fs::write("../../voting_server_config.json", voting_server_config).expect("Failed to write to voting_server_config.json");
     println!("   ---- DONE");
 
 
@@ -148,7 +147,7 @@ fn main() {
         signature, // CA signature
     };
     let certificate = serde_json::to_string(&certificate).unwrap();
-    fs::write("certificate.json", certificate).unwrap();
+    fs::write("../../certificate.json", certificate).unwrap();
 
     println!("-------------");
     println!("STEP3 - DONE.");

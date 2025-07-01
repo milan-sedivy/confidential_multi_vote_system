@@ -28,28 +28,25 @@ impl UsefulOperations for BigUint {
         x.trailing_zeros().unwrap_or(0)
     }
 
-    // Stein's algorithm
     if self.is_zero() {
-    return other.clone();
+        return other.clone();
     }
     if other.is_zero() {
-    return self.clone();
+        return self.clone();
     }
     let mut m = self.clone();
     let mut n = other.clone();
 
-    // find common factors of 2
     let shift = cmp::min(twos(&n), twos(&m));
 
-    // divide m and n by 2 until odd
-    // m inside loop
     n >>= twos(&n);
 
     while !m.is_zero() {
     m >>= twos(&m);
     if n > m {
-    mem::swap(&mut n, &mut m)
+        mem::swap(&mut n, &mut m)
     }
+
     m -= &n;
     }
 
@@ -81,11 +78,10 @@ impl ModSub for BigUint {
         if self < b {
             a = a + modulo;
         }
-        return a - b;
+        a - b
     }
 
     fn signed_modpow(&self, b: &BigInt, modulo: &BigUint, outer_modulo: &BigUint) -> BigUint {
-        //println!("Modulo: {}, SignedModPow: {}",modulo, &(BigUint::zero().modsub(&(b * &BigInt::from(-1)).to_biguint().unwrap(), modulo)));
         self.modpow(&(BigUint::zero().modsub(&(b * &BigInt::from(-1)).to_biguint().unwrap(), modulo)), outer_modulo)
     }
 

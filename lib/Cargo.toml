@@ -1,0 +1,17 @@
+[package]
+name = "cryptographic_system"
+version = "0.3.3"
+edition = "2021"
+
+[dependencies]
+num-bigint = { workspace = true }
+num-prime = "0.4.3"
+rand = { workspace = true }
+sha256 = "1.5.0"
+serde = { workspace = true }
+rsa = { workspace = true }
+
+
+[lib]
+name = "cryptographic_system"
+path = "src/lib.rs"
