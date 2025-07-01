@@ -105,7 +105,7 @@ fn main() {
     println!("STEP3 - Building certificate.");
     let subj_data = SubjData { //needs to be encrypted
         share_count: 4,
-        el_gamal_public_key: el_gamal_kp.y.clone(),
+        el_gamal_key_pair: el_gamal_kp.y.clone(),
     };
     let serialized_subj_data = serde_json::to_string(&subj_data).unwrap();
     let aes_cipher = Aes256Gcm::new_from_slice(client_aes_key.clone().as_slice()).unwrap();

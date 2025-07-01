@@ -27,5 +27,5 @@ pub struct Data {
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct SubjData {
     pub share_count: usize,
-    pub el_gamal_public_key: BigUint,
+    pub el_gamal_key_pair: BigUint,
 }

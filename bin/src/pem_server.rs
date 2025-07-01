@@ -136,8 +136,8 @@ async fn accept_connection(stream: TcpStream, tx: futures_channel::mpsc::Unbound
 
                         debug!("{:?}", subj_data);
 
-                        let mut el_gamal_cipher: ElGamalCipher = ElGamalCipher::from(el_gamal_components.clone(), KeyPair {x: BigUint::zero(), y: subj_data.el_gamal_public_key.clone()});
-                        let (el_gamal_pks_user, alphas_data) = create_el_gamal_keys_and_alphas(el_gamal_components, subj_data.el_gamal_public_key.clone(), subj_data.share_count);
+                        let mut el_gamal_cipher: ElGamalCipher = ElGamalCipher::from(el_gamal_components.clone(), KeyPair {x: BigUint::zero(), y: subj_data.el_gamal_key_pair.clone()});
+                        let (el_gamal_pks_user, alphas_data) = create_el_gamal_keys_and_alphas(el_gamal_components, subj_data.el_gamal_key_pair.clone(), subj_data.share_count);
                         let nonce_vec_user: Vec<BigUint> = (0..el_gamal_pks_user.len()).map(|_| el_gamal_cipher.generate_nonce()).collect();
 
                         // This is here only to fake the simulation that other people vote
